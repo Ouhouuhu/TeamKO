@@ -19,7 +19,6 @@ use ManiaControl\Plugins\Plugin;
 use ManiaControl\Settings\Setting;
 use ManiaControl\Settings\SettingManager;
 use ManiaControl\Commands\CommandListener;
-
 use Maniaplanet\DedicatedServer\InvalidArgumentException;
 use MatchManagerSuite\MatchManagerCore;
 use ouhouuhu\Classes\TeamManager;
@@ -30,8 +29,7 @@ use ouhouuhu\Classes\TeamManager;
  * @author         ouhouuhu based on a script by Beu
  * @license        http://www.gnu.org/licenses/ GNU General Public License, Version 3
  */
-class PluginTeamKO implements CommandListener, CallbackListener, Plugin
-{
+class PluginTeamKO implements CommandListener, CallbackListener, Plugin {
 
     //<editor-fold defaultstate="collapsed" desc="Constans and Variables">
     /*
@@ -41,21 +39,14 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
     const PLUGIN_VERSION = 1.1;
     const PLUGIN_NAME = 'PluginTeamKO Plugin';
     const PLUGIN_AUTHOR = 'ouhouuhu';
-
     const MATCHMANAGERCORE_PLUGIN = 'MatchManagerSuite\\MatchManagerCore';
-
     const RMXTEAMSWIDGET_KO_CALLBACK = 'Trackmania.Knockout.Elimination';
-
     // MatchManagerWidget Properties
     const MLID_RMXTEAMSWIDGET_LIVE_WIDGETBACKGROUND = 'RMXTeamsWidget.Background';
     const MLID_RMXTEAMSWIDGET_LIVE_WIDGETDATA = 'RMXTeamsWidget.Data';
-
     const SETTING_RMXTEAMSWIDGET_SHOWPLAYERS = 'Show for Players';
     const SETTING_RMXTEAMSWIDGET_SHOWSPECTATORS = 'Show for Spectators';
-
     const SETTING_RMXTEAMSWIDGET_MAX_TEAM_SIZE = 'Maximum number of players per team';
-    const SETTING_RMXTEAMSWIDGET_POINTS_DISTRIBUTION = 'Distribution of points';
-
     const SETTING_RMXTEAMSWIDGET_TEAM_NAMES = 'Team names';
     const SETTING_RMXTEAMSWIDGET_TEAM_CHATPREFIXS = 'Team chat prefixes';
     const SETTING_RMXTEAMSWIDGET_FREE_TEAM = 'Free team mode';
@@ -63,6 +54,7 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
     /*
      * Private properties
      */
+
     /** @var ManiaControl $maniaControl */
     private $maniaControl;
 
@@ -74,59 +66,60 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
 
     /** @var string[] */
     private $playersWithML = [];
+
     /** @var string[] */
     private $specsWithML = [];
-    /** @var int[] */
-    private $additiveDistribution;
 
     /** @var bool */
     private $freeTeamMode;
+
     /** @var integer */
-    private $playersKOed;
+    private $playersKOed = 0;
+
     /** @var integer */
     private $playersAtStart;
+
     /** @var string */
     private $chatPrefix = '$s';
-    //</editor-fold>
 
+    /** @var integer */
+    private $matchRoundNb = -1;
+
+    //</editor-fold>
 //<editor-fold desc="ManiaControl declares">
+
     /**
      * @see Plugin::getId()
      */
-    public static function getId(): int
-    {
+    public static function getId(): int {
         return self::PLUGIN_ID;
     }
 
     /**
      * @see Plugin::getName()
      */
-    public static function getName(): string
-    {
+    public static function getName(): string {
         return self::PLUGIN_NAME;
     }
 
     /**
      * @see Plugin::getVersion()
      */
-    public static function getVersion(): float
-    {
+    public static function getVersion(): float {
         return self::PLUGIN_VERSION;
     }
 
     /**
      * @see \ManiaControl\Plugins\Plugin::getAuthor()
      */
-    public static function getAuthor(): string
-    {
+    public static function getAuthor(): string {
         return self::PLUGIN_AUTHOR;
     }
 
     /**
      * @see Plugin::getDescription()
      */
-    public static function getDescription(): string
-    {
+    public static function getDescription(): string {
         return 'Play KO in teams';
     }
 
@@ -134,9 +127,8 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
      * @param ManiaControl $maniaControl
      * @see Plugin::prepare()
      */
-    public static function prepare(ManiaControl $maniaControl)
-    {
-
+    public static function prepare(ManiaControl $maniaControl) {
+        
     }
 
     /**
@@ -144,8 +136,7 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
      * @return bool
      * @see Plugin::load()
      */
-    public function load(ManiaControl $maniaControl): bool
-    {
+    public function load(ManiaControl $maniaControl): bool {
         $this->maniaControl = $maniaControl;
         $this->teamManager = new TeamManager();
 
@@ -156,12 +147,15 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
         $this->maniaControl->getCallbackManager()->registerCallbackListener(PlayerManager::CB_PLAYERDISCONNECT, $this, 'handlePlayerDisconnect');
         $this->maniaControl->getCallbackManager()->registerCallbackListener(SettingManager::CB_SETTING_CHANGED, $this, 'updateSettings');
         $this->maniaControl->getCallbackManager()->registerCallbackListener(Callbacks::MP_STARTMATCHEND, $this, 'handleStartMatch');
+        $this->maniaControl->getCallbackManager()->registerCallbackListener(Callbacks::MP_ENDMATCHEND, $this, 'handleEndMatch');
         $this->maniaControl->getCallbackManager()->registerCallbackListener(Callbacks::TM_SCORES, $this, 'handleEndRoundCallback');
+        $this->maniaControl->getCallbackManager()->registerCallbackListener('MatchManager.StartMatch', $this, 'handleMatchManagerStart');
+        $this->maniaControl->getCallbackManager()->registerCallbackListener('MatchManager.EndMatch', $this, 'handleMatchManagerEnd');
+        
         $this->maniaControl->getCallbackManager()->registerScriptCallbackListener(self::RMXTEAMSWIDGET_KO_CALLBACK, $this, 'handleKnockoutCallback');
 
         // Settings
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_RMXTEAMSWIDGET_MAX_TEAM_SIZE, '3', "Maximum number of players per team that are playing");
-        $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_RMXTEAMSWIDGET_POINTS_DISTRIBUTION, '25,20,17,15,13,11,9,7,5,3,2,1', "Point distribution");
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_RMXTEAMSWIDGET_SHOWPLAYERS, true, "Display widget for players");
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_RMXTEAMSWIDGET_SHOWSPECTATORS, true, "Display widget for spectators");
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_RMXTEAMSWIDGET_TEAM_NAMES, '$f00Team 1, $0f0Team 2', "Name of the teams");
@@ -176,8 +170,7 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
         $this->maniaControl->getCommandManager()->registerCommandListener('purgeteams', $this, 'cmdPurgeTeam', true, 'See player status');
         $this->maniaControl->getCommandManager()->registerCommandListener('clearteams', $this, 'cmdClearTeam', true, 'See player status');
         $this->maniaControl->getCallbackManager()->registerCallbackListener('ManiaPlanet.PlayerChat', $this, 'handlePlayerChat');
-        
-        $this->initializeValues();
+
         $this->initTeams();
         $this->displayManialinks(false);
 
@@ -194,63 +187,37 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
      * @throws InvalidArgumentException
      * @see Plugin::unload()
      */
-    public function unload()
-    {
+    public function unload() {
         $this->closeWidgets();
         $this->maniaControl->getClient()->chatEnableManualRouting(false);
         $this->maniaControl->getCallbackManager()->unregisterCallbackListening('ManiaPlanet.OnPlayerChat', $this);
     }
 
 //</editor-fold>
-
     //<editor-fold desc="Helper functions">
-    private function checkEndMatch()
-    {
+    private function checkEndMatch() {
         $teamsAlive = [];
         $playersAlive = 0;
 
         foreach ($this->teamManager->getTeams() as $team) {
-            foreach ($team->getPlayers() as $player) {
-                if ($player->isAlive) {
-                    $team->points += $this->additiveDistribution[$this->playersAtStart - $this->playersKOed - 1];
-                    $playersAlive += 1;
-                }
+            $playersAlive += $team->getAliveAmount();
+            if ($team->getAliveAmount() > 0) {
+                $teamsAlive[] = $team;
             }
-            if ($team->getAliveAmount() > 0) $teamsAlive[] = $team;
         }
 
         if ($playersAlive == 1) {
-            $teamsAlive[0]->points += $this->additiveDistribution[count($this->additiveDistribution) - $this->playersKOed - 1];
-            Logger::logInfo("Match ends");
+            Logger::logInfo("Force Match to End");
+            $this->matchRoundNb = -1; // reset matchRoundNumber, so we don't get revives
             $this->MatchManagerCore->MatchEnd();
         }
 
         $this->displayManialinks(true);
     }
 
-    private function initializeValues(): void
-    {
+    private function initTeams() {
         $this->teamManager->setTeamSize($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_RMXTEAMSWIDGET_MAX_TEAM_SIZE));
-
-        $pointsDistributionStr = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_RMXTEAMSWIDGET_POINTS_DISTRIBUTION);
-        $pointsDistribution = [];
-        if (strlen($pointsDistributionStr) > 0) {
-            $pointsDistribution = explode(',', str_replace(' ', '', $pointsDistributionStr));
-        }
-
-        for ($i = 0; $i < count($pointsDistribution); $i++) {
-            if ($i == count($pointsDistribution) - 1) {
-                $this->additiveDistribution[$i] = $pointsDistribution[$i];
-            } else {
-                $this->additiveDistribution[$i] = $pointsDistribution[$i] - $pointsDistribution[$i + 1];
-            }
-        }
-
         $this->freeTeamMode = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_RMXTEAMSWIDGET_FREE_TEAM);
-    }
-
-    private function initTeams()
-    {
         $match_started = $this->MatchManagerCore->getMatchStatus();
         if ($match_started) {
             //TODO: say something to the admin
@@ -283,24 +250,12 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
             $this->teamManager->addTeam($teamName, $teamPrefixes[$i]);
         }
     }
-
-
-    /**
-     * @return void
-     */
-    private function resetPoints()
-    {
-        foreach ($this->teamManager->getTeams() as $team) {
-            $team->points = 0;
-        }
-    }
-
+    
     /**
      * @param string $accountId
      * @return string
      */
-    private function getLoginFromAccountID(string $accountId): string
-    {
+    private function getLoginFromAccountID(string $accountId): string {
         $accountId = str_replace("-", "", $accountId);
         $login = "";
         foreach (str_split($accountId, 2) as $pair) {
@@ -315,20 +270,19 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
      * @param string $login
      * @return string
      */
-    private function getAccountIDFromLogin(string $login): string
-    {
+    private function getAccountIDFromLogin(string $login): string {
         $login = str_pad($login, 24, "=", STR_PAD_RIGHT);
         $login = str_replace("_", "/", str_replace("-", "+", $login));
         $login = base64_decode($login);
         return vsprintf("%s%s-%s-%s-%s-%s%s%s", str_split(bin2hex($login), 4));
     }
 
-    private function addPlayerToTeam(string $login, int $team)
-    {
+    private function addPlayerToTeam(string $login, int $team) {
         $player = $this->maniaControl->getPlayerManager()->getPlayer($login, true);
         $matchStarted = $this->MatchManagerCore->getMatchStatus();
         $koPlayer = $this->teamManager->addPlayerToTeam($player, $team);
-        if (!$matchStarted && $koPlayer !== null) $koPlayer->isAlive = true;
+        if (!$matchStarted && $koPlayer !== null)
+            $koPlayer->isAlive = true;
         $this->displayManialinks(false);
     }
 
@@ -337,8 +291,7 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
      *
      * @param Setting $setting
      */
-    public function updateSettings(Setting $setting)
-    {
+    public function updateSettings(Setting $setting) {
         if ($setting->belongsToClass($this)) {
             $this->closeWidgets();
             $this->initializeValues();
@@ -350,45 +303,69 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
     /**
      * Reset players alive status at Match Start
      */
-    public function test_function($dummy)
-    {
+    public function test_function($dummy) {
         //do whatever you want
     }
-    //</editor-fold>
 
+    //</editor-fold>
     //<editor-fold desc="Callbacks">
 
     /**
      * @param $dummy
      * @return void
      */
-    public function handleStartMatch($dummy): void
-    {
-        Logger::Log("start_match");
-        $this->teamManager->resetPlayerStatuses();
+    public function handleStartMatch($dummy): void {
+        
+    }
 
+    public function handleMatchManagerStart($matchid, $settings) {        
+        Logger::logInfo("start_match");
+        $this->matchRoundNb = -1;
+        $this->teamManager->resetPlayerStatuses();
         $this->playersKOed = 0;
         $this->playersAtStart = 0;
-
         foreach ($this->teamManager->getTeams() as $team) {
             $this->playersAtStart += sizeof($team->getPlayers());
         }
-
         $this->displayManialinks(false);
     }
 
-    public function handleEndRoundCallback(OnScoresStructure $structure)
-    {
+        /**
+     * @param $dummy
+     * @return void
+     */
+    public function handleMatchManagerEnd($dummy): void {
+        Logger::Log("MatchManager -> end_match");
+        $this->initTeams();
+    }
+    
+    
+    /**
+     * @param $dummy
+     * @return void
+     */
+    public function handleEndMatch($dummy): void {
+        $this->matchRoundNb += 1;
+    }
+
+    public function handleEndRoundCallback(OnScoresStructure $structure): void {
+        if ($structure->getSection() != "EndRound") {
+            return;
+        }
+        
+        $matchStatus = $this->MatchManagerCore->getMatchStatus();
+        if ($matchStatus && $this->matchRoundNb < 1) {
+            Logger::logInfo("Not starting yet...");
+            return;
+        }
+
         Logger::logInfo($structure->getSection());
 
-        $matchStatus = $this->MatchManagerCore->getMatchStatus();
-        if (!$matchStatus) return;
+        $array = $structure->getPlayerScores();
+        $first = \array_shift($array);
 
-        if ($structure->getSection() != "EndRound") return;
-
-        $first = $structure->getWinnerPlayer();
         if ($first !== null) {
-            $team = $this->teamManager->getPlayerTeam($first->login);
+            $team = $this->teamManager->getPlayerTeam($first->getPlayer()->login);
             if ($team !== null) {
                 $reviveLogin = $team->getReviveLogin();
                 if ($reviveLogin !== null) {
@@ -404,29 +381,31 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
         }
     }
 
-    public function handlePlayerChat($callback)
-    {
+    public function handlePlayerChat($callback) {
         $playerUid = $callback[1][0];
         $login = $callback[1][1];
         $text = $callback[1][2];
 
-        if ($playerUid == 0) return;
-        if (substr($text, 0, 1) == "/") return;
+        if ($playerUid == 0)
+            return;
+        if (substr($text, 0, 1) == "/")
+            return;
 
         $player = $this->maniaControl->getPlayerManager()->getPlayer($login);
-        if ($player == null) return;
+        if ($player == null)
+            return;
 
         $nick = $player->nickname;
         $team = $this->teamManager->getPlayerTeam($login);
         $prefix = "";
-        if ($team) $prefix = $team->chatPrefix;
+        if ($team)
+            $prefix = $team->chatPrefix;
 
         try {
             $this->maniaControl->getClient()->chatSendServerMessage('[$<' . $prefix . $nick . '$>] ' . $text);
         } catch (Exception $e) {
             echo "error while sending chat message to $login: " . $e->getMessage() . "\n";
         }
-
     }
 
     /**
@@ -434,10 +413,10 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
      *
      * @param array $callbackReturn
      */
-    public function handleKnockoutCallback(array $callbackReturn)
-    {
+    public function handleKnockoutCallback(array $callbackReturn): void {
         $matchStatus = $this->MatchManagerCore->getMatchStatus();
-        if (!$matchStatus) return;
+        if ($matchStatus && $this->matchRoundNb < 0)
+            return;
         Logger::log("HandleKnockout");
 
         $json = json_decode($callbackReturn[1][0], true);
@@ -449,14 +428,13 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
         foreach ($json["accountids"] as $accountId) {
             if (preg_match("/\*fakeplayer\d+\*/", $accountId)) {
                 $login = $accountId;
-                continue;
             } else {
                 $login = $this->getLoginFromAccountID($accountId);
             }
             $team = $this->teamManager->getPlayerTeam($login);
-            if ($team == null) continue;
+            if ($team == null)
+                continue;
             $team->setKnockout($login);
-            $team->points += $this->additiveDistribution[$this->playersAtStart - $this->playersKOed - 1];
             $this->playersKOed += 1;
         }
 
@@ -469,8 +447,7 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
      * @param Player $player
      * @return void
      */
-    public function handlePlayerConnect(Player $player): void
-    {
+    public function handlePlayerConnect(Player $player): void {
         Logger::Log("handlePlayerConnect");
         $matchStatus = $this->MatchManagerCore->getMatchStatus();
 
@@ -479,10 +456,12 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
         }
 
         $team = $this->teamManager->getPlayerTeam($player->login);
-        if ($team === null) return;
+        if ($team === null)
+            return;
 
         $player = $team->getPlayer($player->login);
-        if ($player !== null) $player->isConnected = true;
+        if ($player !== null)
+            $player->isConnected = true;
 
         $this->displayManialinks($player->login);
     }
@@ -491,17 +470,18 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
      * @param Player $player
      * @return void
      */
-    public function handlePlayerDisconnect(Player $player): void
-    {
+    public function handlePlayerDisconnect(Player $player): void {
         Logger::Log("handlePlayerDisconnect");
         $team = $this->teamManager->getPlayerTeam($player->login);
-        if ($team === null) return;
+        if ($team === null)
+            return;
         $player = $team->getPlayer($player->login);
-        if ($player === null) return;
+        if ($player === null)
+            return;
         $player->isConnected = false;
     }
-    //</editor-fold>
 
+    //</editor-fold>
     //<editor-fold desc="Chat commands">
 
     /**
@@ -509,8 +489,7 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
      * @param Player $player
      * @return void
      */
-    public function cmdAddToTeam(array $chatCallback, Player $player)
-    {
+    public function cmdAddToTeam(array $chatCallback, Player $player) {
 
         if (!$this->maniaControl->getAuthenticationManager()->checkRight($player, AuthenticationManager::AUTH_LEVEL_ADMIN)) {
             $this->maniaControl->getAuthenticationManager()->sendNotAllowed($player);
@@ -525,7 +504,7 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
             return;
         }
         if (is_numeric($text[1])) {
-            $team = (int)$text[1];
+            $team = (int) $text[1];
         } else {
             $this->maniaControl->getChat()->sendSuccess($this->chatPrefix . "Error with the team!", $player);
             return;
@@ -542,18 +521,17 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
         foreach ($players as $login) {
             $player = $this->maniaControl->getPlayerManager()->getPlayer($login);
             if ($player) {
-                if ($this->teamManager->addPlayerToTeam($player, $team) === null) {
+                if ($this->teamManager->addPlayerToTeam($player, $team - 1) === null) {
                     $this->maniaControl->getChat()->sendError($this->chatPrefix . " Unable to add player " . $player->getEscapedNickname() . "to team " . $team);
                 }
             }
-
         }
 
         $this->maniaControl->getChat()->sendSuccess($this->chatPrefix . "Player(s) were added to the team " . $team . "!", $player);
+        $this->displayManialinks(false);
     }
 
-    public function cmdPurgeTeam(array $chatCallback, Player $player)
-    {
+    public function cmdPurgeTeam(array $chatCallback, Player $player) {
         if (!$this->maniaControl->getAuthenticationManager()->checkRight($player, AuthenticationManager::AUTH_LEVEL_ADMIN)) {
             $this->maniaControl->getAuthenticationManager()->sendNotAllowed($player);
             return;
@@ -561,15 +539,15 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
 
         foreach ($this->teamManager->getTeams() as $team) {
             foreach ($team->getPlayers() as $player) {
-                if (!$player->isConnected) $team->removePlayerByLogin($player->login);
+                if (!$player->isConnected)
+                    $team->removePlayerByLogin($player->login);
             }
         }
 
         $this->displayManialinks(false);
     }
 
-    public function cmdClearTeam(array $chatCallback, Player $player)
-    {
+    public function cmdClearTeam(array $chatCallback, Player $player) {
         if (!$this->maniaControl->getAuthenticationManager()->checkRight($player, AuthenticationManager::AUTH_LEVEL_ADMIN)) {
             $this->maniaControl->getAuthenticationManager()->sendNotAllowed($player);
             return;
@@ -579,8 +557,7 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
         $this->displayManialinks(false);
     }
 
-    public function cmdJoinTeam(array $chatCallback, Player $player)
-    {
+    public function cmdJoinTeam(array $chatCallback, Player $player) {
         Logger::Log("join_team");
 
         if (!$this->freeTeamMode) {
@@ -595,7 +572,7 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
 
         $text = explode(" ", $chatCallback[1][2]);
         if (is_numeric($text[1])) {
-            $teamNb = (int)$text[1];
+            $teamNb = (int) $text[1];
         } else {
             $this->maniaControl->getChat()->sendError($this->chatPrefix . "Teams are characterized by numbers!", $player);
             return;
@@ -615,18 +592,17 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
         $this->displayManialinks(false);
     }
 
-    public function cmdGetTeam(array $chatCallback, Player $player)
-    {
+    public function cmdGetTeam(array $chatCallback, Player $player) {
         Logger::Log("get_teams");
 
         $text = explode(" ", $chatCallback[1][2]);
         if (is_numeric($text[1])) {
-            $teamNb = (int)$text[1];
+            $teamNb = (int) $text[1];
         } else {
             $this->maniaControl->getChat()->sendError($this->chatPrefix . "Teams are characterized by numbers!", $player);
             return;
         }
-        $team = $this->teamManager->getTeam($teamNb);
+        $team = $this->teamManager->getTeam($teamNb - 1);
         if ($team === null) {
             $this->maniaControl->getChat()->sendInformation($this->chatPrefix . "There's no team with this number!", $player);
             return;
@@ -635,8 +611,11 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
         $text = 'In ' . $team->teamName . ' $0f0team, there are: ';
         foreach ($team->getPlayers() as $koPlayer) {
             $out = '(dead)';
-            if ($koPlayer->isAlive) $out = "(alive)";
-            if (!$koPlayer->isConnected) $out = "(disconnected)";
+            if ($koPlayer->isAlive) {
+                $out = "(alive)";
+            } else if (!$koPlayer->isConnected) {
+                $out .= "(disconnected)";
+            }
 
             $text .= $koPlayer->player->getEscapedNickname() . ' ' . $out . ', ';
         }
@@ -644,8 +623,6 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
     }
 
     //</editor-fold>
-
-
     //<editor-fold desc="Manialinks">
 
     /**
@@ -653,8 +630,7 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
      *
      * @param null|string|string[] $login
      */
-    public function closeWidgets($login = null)
-    {
+    public function closeWidgets($login = null) {
         $this->maniaControl->getManialinkManager()->hideManialink(self::MLID_RMXTEAMSWIDGET_LIVE_WIDGETDATA, $login);
         $this->maniaControl->getManialinkManager()->hideManialink(self::MLID_RMXTEAMSWIDGET_LIVE_WIDGETBACKGROUND, $login);
     }
@@ -664,8 +640,7 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
      *
      * @param bool|string $diff
      */
-    public function displayManialinks($diff)
-    {
+    public function displayManialinks($diff) {
         $mlBackground = $this->getWidgetBackground();
         $mlData = $this->getWidgetData();
         $login = null;
@@ -676,13 +651,13 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
         }
 
         if (!$this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_RMXTEAMSWIDGET_SHOWPLAYERS) ||
-            !$this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_RMXTEAMSWIDGET_SHOWSPECTATORS)) {
+                !$this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_RMXTEAMSWIDGET_SHOWSPECTATORS)) {
             $this->closeWidgets();
             return;
         }
 
         if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_RMXTEAMSWIDGET_SHOWPLAYERS) &&
-            $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_RMXTEAMSWIDGET_SHOWSPECTATORS)) {
+                $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_RMXTEAMSWIDGET_SHOWSPECTATORS)) {
             if (!$diff) {
                 $this->maniaControl->getManialinkManager()->sendManialink($mlBackground);
             }
@@ -763,8 +738,7 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
     /**
      * Generate the manialink of the background of the widget
      */
-    public function getWidgetBackground(): string
-    {
+    public function getWidgetBackground(): string {
         $frame = new Frame();
         $frame->setPosition(0, 90);
         $frame->setZ(-2);
@@ -806,8 +780,7 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
     /**
      * Generate the manialink of the data of the widget
      */
-    public function getWidgetData(): string
-    {
+    public function getWidgetData(): string {
         $teams = $this->teamManager->getTeams();
 
         $globalframe = new Frame();
@@ -877,15 +850,11 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
         $points_label->setHorizontalAlign($points_label::CENTER);
         $points_label->setTextSize(3);
 
-        if ($this->MatchManagerCore->getMatchStatus()) {
-            $points_label->setText('$z$fffThis round is worth ' . $this->additiveDistribution[$this->playersAtStart - $this->playersKOed - 1] . ' point(s)!');
-        }
-
         $manialinkData = new ManiaLink(self::MLID_RMXTEAMSWIDGET_LIVE_WIDGETDATA);
         $manialinkData->addChild($globalframe);
         $manialinkData->addChild($winnable_points_frame);
         return $manialinkData;
     }
-    //</editor-fold>
 
+    //</editor-fold>
 }

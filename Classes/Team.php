@@ -14,7 +14,7 @@ class Team
     /** @var KoPlayer[] */
     protected $players = [];
     /** @var string[] */
-    protected $knockedOutLogins;
+    protected $knockedOutLogins = [];
     /** @var int */
     public $points;
     /** @var int */
@@ -62,6 +62,10 @@ class Team
         return null;
     }
 
+    public function resetKnockout() {
+        $this->knockedOutLogins = [];
+    }
+    
     public function setKnockout(string $login)
     {
         $player = $this->getPlayer($login);
@@ -89,7 +93,9 @@ class Team
     {
         $alive = 0;
         foreach ($this->players as $player) {
-            if ($player->isAlive) $alive++;
+            if ($player->isAlive) {
+                $alive += 1;
+            }
         }
         return $alive;
     }

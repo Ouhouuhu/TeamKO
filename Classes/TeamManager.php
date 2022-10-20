@@ -91,6 +91,7 @@ class TeamManager
     {
         foreach ($this->teams as $team) {
             $team->points = 0;
+            $team->resetKnockout();
             foreach ($team->getPlayers() as $player) {
                 $player->isConnected = true;
                 $player->isAlive = true;
