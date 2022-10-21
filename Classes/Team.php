@@ -50,6 +50,17 @@ class Team
         if (array_key_exists($login, $this->players)) unset($this->players[$login]);
     }
 
+    /**
+     * @return string[]
+     */
+    public function getPlayerLogins(): array
+    {
+        $out = [];
+        foreach ($this->players as $player) {
+            $out[] = $player->login;
+        }
+        return $out;
+    }
 
     /**
      * @param string $login
@@ -62,10 +73,14 @@ class Team
         return null;
     }
 
-    public function resetKnockout() {
+    /**
+     * @return void
+     */
+    public function resetKnockout(): void
+    {
         $this->knockedOutLogins = [];
     }
-    
+
     public function setKnockout(string $login)
     {
         $player = $this->getPlayer($login);
@@ -89,6 +104,9 @@ class Team
         return $this->players;
     }
 
+    /**
+     * @return int
+     */
     public function getAliveAmount(): int
     {
         $alive = 0;

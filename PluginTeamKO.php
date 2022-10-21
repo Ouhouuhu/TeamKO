@@ -3,12 +3,14 @@
 namespace ouhouuhu;
 
 use Exception;
+use FML\Controls\Labels\Label_Button;
 use ManiaControl\Admin\AuthenticationManager;
 use FML\Controls\Frame;
 use FML\Controls\Label;
 use FML\Controls\Quad;
 use FML\ManiaLink;
 use ManiaControl\Callbacks\CallbackListener;
+use ManiaControl\Callbacks\CallbackManager;
 use ManiaControl\Callbacks\Callbacks;
 use ManiaControl\Callbacks\Structures\TrackMania\OnScoresStructure;
 use ManiaControl\Logger;
@@ -29,9 +31,10 @@ use ouhouuhu\Classes\TeamManager;
  * @author         ouhouuhu based on a script by Beu
  * @license        http://www.gnu.org/licenses/ GNU General Public License, Version 3
  */
-class PluginTeamKO implements CommandListener, CallbackListener, Plugin {
+class PluginTeamKO implements CommandListener, CallbackListener, Plugin
+{
 
-    //<editor-fold defaultstate="collapsed" desc="Constans and Variables">
+//<editor-fold defaultstate="collapsed" desc="Constans and Variables">
     /*
      * Constants
      */
@@ -50,6 +53,12 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin {
     const SETTING_RMXTEAMSWIDGET_TEAM_NAMES = 'Team names';
     const SETTING_RMXTEAMSWIDGET_TEAM_CHATPREFIXS = 'Team chat prefixes';
     const SETTING_RMXTEAMSWIDGET_FREE_TEAM = 'Free team mode';
+    const MLID_TEAMKO_WINDOW = 'TeamKOWidget.Window';
+    const ACTION_SPECTATE_PLAYER = 'TeamKO.SpectatePlayer';
+    const ACTION_CLOSE_WIDGET = 'TeamKO.CloseWidget';
+    const ACTION_TEAM1 = 'TeamKO.ToTeam1';
+    const ACTION_TEAM2 = 'TeamKO.ToTeam2';
+    const ACTION_REMOVE = 'TeamKO.Remove';
 
     /*
      * Private properties
@@ -91,35 +100,40 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin {
     /**
      * @see Plugin::getId()
      */
-    public static function getId(): int {
+    public static function getId(): int
+    {
         return self::PLUGIN_ID;
     }
 
     /**
      * @see Plugin::getName()
      */
-    public static function getName(): string {
+    public static function getName(): string
+    {
         return self::PLUGIN_NAME;
     }
 
     /**
      * @see Plugin::getVersion()
      */
-    public static function getVersion(): float {
+    public static function getVersion(): float
+    {
         return self::PLUGIN_VERSION;
     }
 
     /**
      * @see \ManiaControl\Plugins\Plugin::getAuthor()
      */
-    public static function getAuthor(): string {
+    public static function getAuthor(): string
+    {
         return self::PLUGIN_AUTHOR;
     }
 
     /**
      * @see Plugin::getDescription()
      */
-    public static function getDescription(): string {
+    public static function getDescription(): string
+    {
         return 'Play KO in teams';
     }
 
@@ -127,8 +141,9 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin {
      * @param ManiaControl $maniaControl
      * @see Plugin::prepare()
      */
-    public static function prepare(ManiaControl $maniaControl) {
-        
+    public static function prepare(ManiaControl $maniaControl)
+    {
+
     }
 
     /**
@@ -136,7 +151,8 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin {
      * @return bool
      * @see Plugin::load()
      */
-    public function load(ManiaControl $maniaControl): bool {
+    public function load(ManiaControl $maniaControl): bool
+    {
         $this->maniaControl = $maniaControl;
         $this->teamManager = new TeamManager();
 
@@ -151,7 +167,8 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin {
         $this->maniaControl->getCallbackManager()->registerCallbackListener(Callbacks::TM_SCORES, $this, 'handleEndRoundCallback');
         $this->maniaControl->getCallbackManager()->registerCallbackListener('MatchManager.StartMatch', $this, 'handleMatchManagerStart');
         $this->maniaControl->getCallbackManager()->registerCallbackListener('MatchManager.EndMatch', $this, 'handleMatchManagerEnd');
-        
+        $this->maniaControl->getCallbackManager()->registerCallbackListener(CallbackManager::CB_MP_PLAYERMANIALINKPAGEANSWER, $this, 'handleManialinkPageAnswer');
+
         $this->maniaControl->getCallbackManager()->registerScriptCallbackListener(self::RMXTEAMSWIDGET_KO_CALLBACK, $this, 'handleKnockoutCallback');
 
         // Settings
@@ -187,15 +204,17 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin {
      * @throws InvalidArgumentException
      * @see Plugin::unload()
      */
-    public function unload() {
+    public function unload()
+    {
         $this->closeWidgets();
         $this->maniaControl->getClient()->chatEnableManualRouting(false);
         $this->maniaControl->getCallbackManager()->unregisterCallbackListening('ManiaPlanet.OnPlayerChat', $this);
     }
 
 //</editor-fold>
-    //<editor-fold desc="Helper functions">
-    private function checkEndMatch() {
+//<editor-fold desc="Helper functions">
+    private function checkEndMatch()
+    {
         $teamsAlive = [];
         $playersAlive = 0;
 
@@ -215,7 +234,8 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin {
         $this->displayManialinks(true);
     }
 
-    private function initTeams() {
+    private function initTeams()
+    {
         $this->teamManager->setTeamSize($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_RMXTEAMSWIDGET_MAX_TEAM_SIZE));
         $this->freeTeamMode = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_RMXTEAMSWIDGET_FREE_TEAM);
         $match_started = $this->MatchManagerCore->getMatchStatus();
@@ -250,12 +270,13 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin {
             $this->teamManager->addTeam($teamName, $teamPrefixes[$i]);
         }
     }
-    
+
     /**
      * @param string $accountId
      * @return string
      */
-    private function getLoginFromAccountID(string $accountId): string {
+    private function getLoginFromAccountID(string $accountId): string
+    {
         $accountId = str_replace("-", "", $accountId);
         $login = "";
         foreach (str_split($accountId, 2) as $pair) {
@@ -270,20 +291,40 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin {
      * @param string $login
      * @return string
      */
-    private function getAccountIDFromLogin(string $login): string {
+    private function getAccountIDFromLogin(string $login): string
+    {
         $login = str_pad($login, 24, "=", STR_PAD_RIGHT);
         $login = str_replace("_", "/", str_replace("-", "+", $login));
         $login = base64_decode($login);
         return vsprintf("%s%s-%s-%s-%s-%s%s%s", str_split(bin2hex($login), 4));
     }
 
-    private function addPlayerToTeam(string $login, int $team) {
+    private function addPlayerToTeam(string $login, int $team)
+    {
         $player = $this->maniaControl->getPlayerManager()->getPlayer($login, true);
         $matchStarted = $this->MatchManagerCore->getMatchStatus();
-        $koPlayer = $this->teamManager->addPlayerToTeam($player, $team);
-        if (!$matchStarted && $koPlayer !== null)
-            $koPlayer->isAlive = true;
+        if ($matchStarted) {
+            $this->maniaControl->getChat()->sendError($this->chatPrefix . " Can't add player to team $team, match is alreadys started.");
+            return;
+        }
+        $koPlayer = $this->teamManager->addPlayerToTeam($player, $team - 1);
+        if ($koPlayer === null) {
+            $this->maniaControl->getChat()->sendError($this->chatPrefix . " Unable to add player " . $player->getEscapedNickname() . " to team " . $team);
+        }
+
         $this->displayManialinks(false);
+    }
+
+    private function removePlayerFromTeam(string $login)
+    {
+        $matchStarted = $this->MatchManagerCore->getMatchStatus();
+        if ($matchStarted) {
+            $this->maniaControl->getChat()->sendError($this->chatPrefix . " Can't remove player from team, match is already started.");
+            return;
+        }
+        foreach ($this->teamManager->getTeams() as $team) {
+            $team->removePlayerByLogin($login);
+        }
     }
 
     /**
@@ -291,10 +332,11 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin {
      *
      * @param Setting $setting
      */
-    public function updateSettings(Setting $setting) {
+    public function updateSettings(Setting $setting)
+    {
         if ($setting->belongsToClass($this)) {
             $this->closeWidgets();
-            $this->initializeValues();
+            $this->initTeams();
             $this->teamManager->resetPlayerStatuses();
             $this->displayManialinks(false);
         }
@@ -303,7 +345,8 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin {
     /**
      * Reset players alive status at Match Start
      */
-    public function test_function($dummy) {
+    public function test_function($dummy)
+    {
         //do whatever you want
     }
 
@@ -311,14 +354,56 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin {
     //<editor-fold desc="Callbacks">
 
     /**
+     * Called on ManialinkPageAnswer
+     *
+     * @param array $callback
+     */
+    public function handleManialinkPageAnswer(array $callback)
+    {
+        $actionId = $callback[1][2];
+        $actionArray = explode('.', $actionId, 3);
+        if (count($actionArray) < 2) {
+            return;
+        }
+        $action = $actionArray[0] . '.' . $actionArray[1];
+
+        if (count($actionArray) > 2) {
+
+            $login = $callback[1][1];
+            $targetLogin = $actionArray[2];
+            switch ($action) {
+
+                case self::ACTION_CLOSE_WIDGET:
+                    $this->closeTeamWindow($login);
+                    break;
+                case self::ACTION_TEAM1:
+                    $this->addPlayerToTeam($targetLogin, 1);
+                    $this->showTeamWindow($login);
+                    break;
+                case self::ACTION_TEAM2:
+                    $this->addPlayerToTeam($targetLogin, 2);
+                    $this->showTeamWindow($login);
+                    break;
+                case self::ACTION_REMOVE:
+                    $this->removePlayerFromTeam($targetLogin);
+                    $this->displayManialinks(false);
+                    $this->showTeamWindow($login);
+                    break;
+            }
+        }
+    }
+
+    /**
      * @param $dummy
      * @return void
      */
-    public function handleStartMatch($dummy): void {
-        
+    public function handleStartMatch($dummy): void
+    {
+
     }
 
-    public function handleMatchManagerStart($matchid, $settings) {        
+    public function handleMatchManagerStart($matchid, $settings)
+    {
         Logger::logInfo("start_match");
         $this->matchRoundNb = -1;
         $this->teamManager->resetPlayerStatuses();
@@ -330,29 +415,31 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin {
         $this->displayManialinks(false);
     }
 
-        /**
-     * @param $dummy
-     * @return void
-     */
-    public function handleMatchManagerEnd($dummy): void {
-        Logger::Log("MatchManager -> end_match");
-        $this->initTeams();
-    }
-    
-    
     /**
      * @param $dummy
      * @return void
      */
-    public function handleEndMatch($dummy): void {
+    public function handleMatchManagerEnd($dummy): void
+    {
+        Logger::Log("MatchManager -> end_match");
+        $this->initTeams();
+    }
+
+    /**
+     * @param $dummy
+     * @return void
+     */
+    public function handleEndMatch($dummy): void
+    {
         $this->matchRoundNb += 1;
     }
 
-    public function handleEndRoundCallback(OnScoresStructure $structure): void {
+    public function handleEndRoundCallback(OnScoresStructure $structure): void
+    {
         if ($structure->getSection() != "EndRound") {
             return;
         }
-        
+
         $matchStatus = $this->MatchManagerCore->getMatchStatus();
         if ($matchStatus && $this->matchRoundNb < 1) {
             Logger::logInfo("Not starting yet...");
@@ -381,7 +468,8 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin {
         }
     }
 
-    public function handlePlayerChat($callback) {
+    public function handlePlayerChat($callback)
+    {
         $playerUid = $callback[1][0];
         $login = $callback[1][1];
         $text = $callback[1][2];
@@ -413,7 +501,8 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin {
      *
      * @param array $callbackReturn
      */
-    public function handleKnockoutCallback(array $callbackReturn): void {
+    public function handleKnockoutCallback(array $callbackReturn): void
+    {
         $matchStatus = $this->MatchManagerCore->getMatchStatus();
         if ($matchStatus && $this->matchRoundNb < 0)
             return;
@@ -447,7 +536,8 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin {
      * @param Player $player
      * @return void
      */
-    public function handlePlayerConnect(Player $player): void {
+    public function handlePlayerConnect(Player $player): void
+    {
         Logger::Log("handlePlayerConnect");
         $matchStatus = $this->MatchManagerCore->getMatchStatus();
 
@@ -470,7 +560,8 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin {
      * @param Player $player
      * @return void
      */
-    public function handlePlayerDisconnect(Player $player): void {
+    public function handlePlayerDisconnect(Player $player): void
+    {
         Logger::Log("handlePlayerDisconnect");
         $team = $this->teamManager->getPlayerTeam($player->login);
         if ($team === null)
@@ -489,7 +580,8 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin {
      * @param Player $player
      * @return void
      */
-    public function cmdAddToTeam(array $chatCallback, Player $player) {
+    public function cmdAddToTeam(array $chatCallback, Player $player)
+    {
 
         if (!$this->maniaControl->getAuthenticationManager()->checkRight($player, AuthenticationManager::AUTH_LEVEL_ADMIN)) {
             $this->maniaControl->getAuthenticationManager()->sendNotAllowed($player);
@@ -504,7 +596,7 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin {
             return;
         }
         if (is_numeric($text[1])) {
-            $team = (int) $text[1];
+            $team = (int)$text[1];
         } else {
             $this->maniaControl->getChat()->sendSuccess($this->chatPrefix . "Error with the team!", $player);
             return;
@@ -531,7 +623,8 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin {
         $this->displayManialinks(false);
     }
 
-    public function cmdPurgeTeam(array $chatCallback, Player $player) {
+    public function cmdPurgeTeam(array $chatCallback, Player $player)
+    {
         if (!$this->maniaControl->getAuthenticationManager()->checkRight($player, AuthenticationManager::AUTH_LEVEL_ADMIN)) {
             $this->maniaControl->getAuthenticationManager()->sendNotAllowed($player);
             return;
@@ -547,7 +640,8 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin {
         $this->displayManialinks(false);
     }
 
-    public function cmdClearTeam(array $chatCallback, Player $player) {
+    public function cmdClearTeam(array $chatCallback, Player $player)
+    {
         if (!$this->maniaControl->getAuthenticationManager()->checkRight($player, AuthenticationManager::AUTH_LEVEL_ADMIN)) {
             $this->maniaControl->getAuthenticationManager()->sendNotAllowed($player);
             return;
@@ -557,7 +651,8 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin {
         $this->displayManialinks(false);
     }
 
-    public function cmdJoinTeam(array $chatCallback, Player $player) {
+    public function cmdJoinTeam(array $chatCallback, Player $player)
+    {
         Logger::Log("join_team");
 
         if (!$this->freeTeamMode) {
@@ -572,7 +667,7 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin {
 
         $text = explode(" ", $chatCallback[1][2]);
         if (is_numeric($text[1])) {
-            $teamNb = (int) $text[1];
+            $teamNb = (int)$text[1];
         } else {
             $this->maniaControl->getChat()->sendError($this->chatPrefix . "Teams are characterized by numbers!", $player);
             return;
@@ -592,47 +687,177 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin {
         $this->displayManialinks(false);
     }
 
-    public function cmdGetTeam(array $chatCallback, Player $player) {
-        Logger::Log("get_teams");
-
-        $text = explode(" ", $chatCallback[1][2]);
-        if (is_numeric($text[1])) {
-            $teamNb = (int) $text[1];
-        } else {
-            $this->maniaControl->getChat()->sendError($this->chatPrefix . "Teams are characterized by numbers!", $player);
-            return;
-        }
-        $team = $this->teamManager->getTeam($teamNb - 1);
-        if ($team === null) {
-            $this->maniaControl->getChat()->sendInformation($this->chatPrefix . "There's no team with this number!", $player);
+    public function cmdGetTeam(array $chatCallback, Player $player)
+    {
+        if (!$this->maniaControl->getAuthenticationManager()->checkRight($player, AuthenticationManager::AUTH_LEVEL_ADMIN)) {
+            $this->maniaControl->getAuthenticationManager()->sendNotAllowed($player);
             return;
         }
 
-        $text = 'In ' . $team->teamName . ' $0f0team, there are: ';
-        foreach ($team->getPlayers() as $koPlayer) {
-            $out = '(dead)';
-            if ($koPlayer->isAlive) {
-                $out = "(alive)";
-            } else if (!$koPlayer->isConnected) {
-                $out .= "(disconnected)";
-            }
-
-            $text .= $koPlayer->player->getEscapedNickname() . ' ' . $out . ', ';
-        }
-        $this->maniaControl->getChat()->sendInformation($this->chatPrefix . rtrim($text, ', '), $player);
+        $this->showTeamWindow($player->login);
     }
 
     //</editor-fold>
     //<editor-fold desc="Manialinks">
 
     /**
+     * Close TeamWindow
+     *
+     * @param string $login
+     */
+    public function closeTeamWindow(string $login)
+    {
+        $this->maniaControl->getManialinkManager()->hideManialink(self::MLID_TEAMKO_WINDOW, $login);
+    }
+
+    /**
      * Close a Widget
      *
      * @param null|string|string[] $login
      */
-    public function closeWidgets($login = null) {
+    public function closeWidgets($login = null)
+    {
         $this->maniaControl->getManialinkManager()->hideManialink(self::MLID_RMXTEAMSWIDGET_LIVE_WIDGETDATA, $login);
         $this->maniaControl->getManialinkManager()->hideManialink(self::MLID_RMXTEAMSWIDGET_LIVE_WIDGETBACKGROUND, $login);
+    }
+
+    /**
+     *
+     * @param string $login
+     * @return void
+     */
+    public function showTeamWindow(string $login): void
+    {
+        $maniaLink = new ManiaLink(self::MLID_TEAMKO_WINDOW);
+        $teamLogins = [];
+        foreach ($this->teamManager->getTeams() as $teamIndex => $team) {
+            $teamLogins[$teamIndex] = $team->getPlayerLogins();
+        }
+        $teamPrefixes = [
+            0 => $this->teamManager->getTeam(0)->chatPrefix,
+            1 => $this->teamManager->getTeam(1)->chatPrefix
+        ];
+
+        $mainFrame = new Frame();
+        $mainFrame->setPosition(-45, 65);
+
+        $quad = new Quad();
+        $mainFrame->addChild($quad);
+        $quad->setSize(95, 120)
+            ->setY(5)
+            ->setHorizontalAlign("left")
+            ->setVerticalAlign("top")
+            ->setBackgroundColor("000a");
+
+        $quad2 = new Quad();
+        $mainFrame->addChild($quad2);
+        $quad2->setSize(95, 5)
+            ->setY(5)
+            ->setHorizontalAlign("left")
+            ->setVerticalAlign("top")
+            ->setBackgroundColor("000");
+
+        $label = new Label();
+        $mainFrame->addChild($label);
+        $label->setText("Players and Teams")
+            ->setTextSize(2)
+            ->setHorizontalAlign("left")
+            ->setPosition(2, 2)
+            ->setTextFont("GameFontSemiBold");
+
+        $closeButton = new Label_Button();
+        $mainFrame->addChild($closeButton);
+        $closeButton->addActionTriggerFeature(self::ACTION_CLOSE_WIDGET . "." . $login);
+        $closeButton->setText("X")
+            ->centerAlign()
+            ->setTextSize(1.5)
+            ->setSize(5, 5)
+            ->setAreaColor("900")
+            ->setAreaFocusColor("f00")
+            ->setPosition(92.5, 2.5);
+
+
+        $teamFrame = new Frame();
+        $teamFrame->setPosition(0, -2.5);
+        $mainFrame->addChild($teamFrame);
+
+
+        foreach ($this->maniaControl->getPlayerManager()->getPlayers(true) as $playerIndex => $player) {
+            $team = " ";
+            foreach ($teamLogins as $teamNb => $logins) {
+                if (in_array($player->login, $logins)) {
+                    $team = $teamNb;
+                }
+            }
+
+            $playerFrame = new Frame();
+            $teamFrame->addChild($playerFrame);
+            $playerFrame->setPosition(2.5, -$playerIndex * 4.5);
+
+            $quad = new Quad();
+            $playerFrame->addChild($quad);
+            $quad->setSize(90, 4)
+                ->setZ(-1)
+                ->setHorizontalAlign("left")
+                ->setBackgroundColor("0007");
+
+            $labelNb = new Label();
+            $playerFrame->addChild($labelNb);
+            $prefix = "";
+            if (is_numeric($team)) {
+                $prefix = $teamPrefixes[$team];
+            }
+            $labelNb->setText($prefix)
+                ->setSize(10, 4)
+                ->setX(5)
+                ->setHorizontalAlign("center")
+                ->setTextSize(2)
+                ->setTextFont("GameFontBlack");
+
+            $label = new Label();
+            $playerFrame->addChild($label);
+            $label->setText($player->getEscapedNickname())
+                ->setSize(50, 4)
+                ->setX(12)
+                ->setHorizontalAlign("left")
+                ->setTextSize(1.5)
+                ->setTextFont("GameFontSemiBold");
+
+            $team1 = new Label_Button();
+            $playerFrame->addChild($team1);
+            $team1->addActionTriggerFeature(self::ACTION_TEAM1 . "." . $player->login);
+            $team1->setText($teamPrefixes[0])
+                ->setTextSize(1)
+                ->setAreaFocusColor("777")
+                ->setAreaColor("000")
+                ->setSize(10, 4)
+                ->setX(60);
+
+            $team2 = new Label_Button();
+            $playerFrame->addChild($team2);
+            $team2->addActionTriggerFeature(self::ACTION_TEAM2 . "." . $player->login);
+            $team2->setText($teamPrefixes[1])
+                ->setTextSize(1)
+                ->setAreaFocusColor("777")
+                ->setAreaColor("000")
+                ->setSize(10, 4)
+                ->setX(71);
+
+            $team2 = new Label_Button();
+            $playerFrame->addChild($team2);
+            $team2->addActionTriggerFeature(self::ACTION_REMOVE . "." . $player->login);
+            $team2->setText("Remove")
+                ->setTextSize(1)
+                ->setAreaFocusColor("777")
+                ->setAreaColor("000")
+                ->setSize(10, 4)
+                ->setX(82);
+        }
+
+        $maniaLink->addChild($mainFrame);
+
+        $this->maniaControl->getManialinkManager()->sendManialink($maniaLink, $login);
+        Logger::logInfo("Displayed");
     }
 
     /**
@@ -640,7 +865,8 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin {
      *
      * @param bool|string $diff
      */
-    public function displayManialinks($diff) {
+    public function displayManialinks($diff)
+    {
         $mlBackground = $this->getWidgetBackground();
         $mlData = $this->getWidgetData();
         $login = null;
@@ -651,13 +877,13 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin {
         }
 
         if (!$this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_RMXTEAMSWIDGET_SHOWPLAYERS) ||
-                !$this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_RMXTEAMSWIDGET_SHOWSPECTATORS)) {
+            !$this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_RMXTEAMSWIDGET_SHOWSPECTATORS)) {
             $this->closeWidgets();
             return;
         }
 
         if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_RMXTEAMSWIDGET_SHOWPLAYERS) &&
-                $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_RMXTEAMSWIDGET_SHOWSPECTATORS)) {
+            $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_RMXTEAMSWIDGET_SHOWSPECTATORS)) {
             if (!$diff) {
                 $this->maniaControl->getManialinkManager()->sendManialink($mlBackground);
             }
@@ -738,7 +964,8 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin {
     /**
      * Generate the manialink of the background of the widget
      */
-    public function getWidgetBackground(): string {
+    public function getWidgetBackground(): string
+    {
         $frame = new Frame();
         $frame->setPosition(0, 90);
         $frame->setZ(-2);
@@ -773,14 +1000,15 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin {
 
         $manialink = new ManiaLink(self::MLID_RMXTEAMSWIDGET_LIVE_WIDGETBACKGROUND);
         $manialink->addChild($frame);
-        $manialink->addChild($frame2);
+        // $manialink->addChild($frame2);
         return $manialink;
     }
 
     /**
      * Generate the manialink of the data of the widget
      */
-    public function getWidgetData(): string {
+    public function getWidgetData(): string
+    {
         $teams = $this->teamManager->getTeams();
 
         $globalframe = new Frame();
@@ -852,9 +1080,9 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin {
 
         $manialinkData = new ManiaLink(self::MLID_RMXTEAMSWIDGET_LIVE_WIDGETDATA);
         $manialinkData->addChild($globalframe);
-        $manialinkData->addChild($winnable_points_frame);
+        // $manialinkData->addChild($winnable_points_frame);
         return $manialinkData;
     }
 
-    //</editor-fold>
+//</editor-fold>
 }
