@@ -85,7 +85,8 @@ class Team
     {
         $player = $this->getPlayer($login);
         if ($player !== null) $player->isAlive = false;
-        $this->knockedOutLogins[] = $login;
+        array_unshift($this->knockedOutLogins, $login);
+        //$this->knockedOutLogins [] = $login;
     }
 
     /**

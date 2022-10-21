@@ -94,6 +94,8 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
     /** @var integer */
     private $matchRoundNb = -1;
 
+    /** @var string|null */
+    private ?string $reviveLogin = null;
     //</editor-fold>
 //<editor-fold desc="ManiaControl declares">
 
@@ -168,7 +170,6 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
         $this->maniaControl->getCallbackManager()->registerCallbackListener('MatchManager.StartMatch', $this, 'handleMatchManagerStart');
         $this->maniaControl->getCallbackManager()->registerCallbackListener('MatchManager.EndMatch', $this, 'handleMatchManagerEnd');
         $this->maniaControl->getCallbackManager()->registerCallbackListener(CallbackManager::CB_MP_PLAYERMANIALINKPAGEANSWER, $this, 'handleManialinkPageAnswer');
-
         $this->maniaControl->getCallbackManager()->registerScriptCallbackListener(self::RMXTEAMSWIDGET_KO_CALLBACK, $this, 'handleKnockoutCallback');
 
         // Settings
@@ -181,7 +182,7 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
 
         // Commands
         $this->maniaControl->getCommandManager()->registerCommandListener('jointeam', $this, 'cmdJoinTeam', false, 'Allow players to join the team they want');
-        $this->maniaControl->getCommandManager()->registerCommandListener('getteam', $this, 'cmdGetTeam', true, 'Allow players to see the teams');
+        $this->maniaControl->getCommandManager()->registerCommandListener('teams', $this, 'cmdGetTeam', true, 'Allow players to see the teams');
         $this->maniaControl->getCommandManager()->registerCommandListener('addteam', $this, 'cmdAddToTeam', true, 'Add players to teams');
         $this->maniaControl->getCommandManager()->registerCommandListener('test', $this, 'test_function', true, 'TEST function, do not use it!');
         $this->maniaControl->getCommandManager()->registerCommandListener('purgeteams', $this, 'cmdPurgeTeam', true, 'See player status');
@@ -213,22 +214,47 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
 
 //</editor-fold>
 //<editor-fold desc="Helper functions">
+    private function revivePlayer()
+    {
+        if ($this->reviveLogin !== null) {
+            try {
+                Logger::log("reviving:" . $this->reviveLogin);
+                $this->maniaControl->getClient()->TriggerModeScriptEvent("Knockout.Revive", [$this->reviveLogin]);
+                $team = $this->teamManager->getPlayerTeam($this->reviveLogin);
+                if ($team !== null) {
+                    $team->getPlayer($this->reviveLogin)->isAlive = true;
+                }
+                $this->playersKOed -= 1;
+            } catch (InvalidArgumentException $e) {
+                Logger::logError($e->getMessage());
+            }
+        }
+    }
+
     private function checkEndMatch()
     {
-        $teamsAlive = [];
+        $winningTeam = null;
         $playersAlive = 0;
+        $stopMatch = false;
 
         foreach ($this->teamManager->getTeams() as $team) {
             $playersAlive += $team->getAliveAmount();
-            if ($team->getAliveAmount() > 0) {
-                $teamsAlive[] = $team;
+            if ($team->getAliveAmount() <= 0) {
+                $stopMatch = True;
+            } else {
+                $winningTeam = $team;
             }
+
         }
 
-        if ($playersAlive == 1) {
+        if ($playersAlive == 1 || $stopMatch) {
             Logger::logInfo("Force Match to End");
             $this->matchRoundNb = -1; // reset matchRoundNumber, so we don't get revives
-            $this->MatchManagerCore->MatchEnd();
+            if ($winningTeam !== null) {
+                $this->maniaControl->getChat()->sendSuccess('$z$sTeam $o' . $winningTeam->teamName . '$z$s wins the match!');
+            }
+            $this->MatchManagerCore->MatchStop();
+
         }
 
         $this->displayManialinks(true);
@@ -345,9 +371,19 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
     /**
      * Reset players alive status at Match Start
      */
-    public function test_function($dummy)
+    public function test_function($callback, Player $cbPlayer)
     {
-        //do whatever you want
+        $this->teamManager->addPlayerToTeam($cbPlayer, 0);
+
+        for ($i = 1; $i <= 10; $i++) {
+            $this->maniaControl->getClient()->connectFakePlayer();
+            $player = $this->maniaControl->getPlayerManager()->getPlayer("*fakeplayer" . $i . "*");
+            if ($player !== null) {
+                $this->teamManager->addPlayerToTeam($player, $i % 2);
+            }
+        }
+
+        $this->MatchManagerCore->onCommandMatchStart([], $cbPlayer);
     }
 
     //</editor-fold>
@@ -431,18 +467,20 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
      */
     public function handleEndMatch($dummy): void
     {
-        $this->matchRoundNb += 1;
+        $matchStatus = $this->MatchManagerCore->getMatchStatus();
+        if ($matchStatus) $this->matchRoundNb += 1;
     }
 
     public function handleEndRoundCallback(OnScoresStructure $structure): void
     {
-        if ($structure->getSection() != "EndRound") {
+        $matchStatus = $this->MatchManagerCore->getMatchStatus();
+        if (!$matchStatus) return;
+
+        if ($structure->getSection() == "EndRound") {
+            $this->checkEndMatch();
             return;
         }
-
-        $matchStatus = $this->MatchManagerCore->getMatchStatus();
-        if ($matchStatus && $this->matchRoundNb < 1) {
-            Logger::logInfo("Not starting yet...");
+        if ($structure->getSection() != "PreEndRound") {
             return;
         }
 
@@ -454,16 +492,8 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
         if ($first !== null) {
             $team = $this->teamManager->getPlayerTeam($first->getPlayer()->login);
             if ($team !== null) {
-                $reviveLogin = $team->getReviveLogin();
-                if ($reviveLogin !== null) {
-                    try {
-                        Logger::log("reviving:" . $reviveLogin);
-                        $this->maniaControl->getClient()->TriggerModeScriptEvent("Knockout.Revive", [$reviveLogin]);
-                        $team->getPlayer($reviveLogin)->isAlive = true;
-                    } catch (InvalidArgumentException $e) {
-                        Logger::logError($e->getMessage());
-                    }
-                }
+                $this->reviveLogin = $team->getReviveLogin();
+                Logger::logInfo($this->reviveLogin);
             }
         }
     }
@@ -487,7 +517,7 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
         $team = $this->teamManager->getPlayerTeam($login);
         $prefix = "";
         if ($team)
-            $prefix = $team->chatPrefix;
+            $prefix = trim($team->chatPrefix) . " ";
 
         try {
             $this->maniaControl->getClient()->chatSendServerMessage('[$<' . $prefix . $nick . '$>] ' . $text);
@@ -503,9 +533,10 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
      */
     public function handleKnockoutCallback(array $callbackReturn): void
     {
-        $matchStatus = $this->MatchManagerCore->getMatchStatus();
+        /*$matchStatus = $this->MatchManagerCore->getMatchStatus();
         if ($matchStatus && $this->matchRoundNb < 0)
-            return;
+            return; */
+
         Logger::log("HandleKnockout");
 
         $json = json_decode($callbackReturn[1][0], true);
@@ -527,7 +558,8 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
             $this->playersKOed += 1;
         }
 
-        $this->checkEndMatch();
+        $this->revivePlayer();
+
     }
 
     /**
