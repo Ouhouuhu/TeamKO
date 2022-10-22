@@ -383,6 +383,11 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
      */
     public function test_function($callback, Player $cbPlayer)
     {
+        if (!$this->maniaControl->getAuthenticationManager()->checkRight($cbPlayer, AuthenticationManager::AUTH_LEVEL_ADMIN)) {
+            $this->maniaControl->getAuthenticationManager()->sendNotAllowed($cbPlayer);
+            return;
+        }
+
         $this->teamManager->addPlayerToTeam($cbPlayer, 0);
 
         for ($i = 1; $i <= 9; $i++) {
@@ -402,6 +407,11 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
 
     public function test_function2($callback, Player $cbPlayer)
     {
+        if (!$this->maniaControl->getAuthenticationManager()->checkRight($cbPlayer, AuthenticationManager::AUTH_LEVEL_ADMIN)) {
+            $this->maniaControl->getAuthenticationManager()->sendNotAllowed($cbPlayer);
+            return;
+        }
+
         for ($i = 1; $i <= 9; $i++) {//put same number as above to end the loop for proper testing
             $this->maniaControl->getClient()->connectFakePlayer();
         }
