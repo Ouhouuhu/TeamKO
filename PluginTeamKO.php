@@ -222,9 +222,21 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
             try {
                 $login = $this->reviveTeam->getReviveLogin();
                 Logger::log("reviving:" . $login);
-                $this->maniaControl->getClient()->TriggerModeScriptEvent("Knockout.Revive", [$login]);
-                $this->reviveTeam->getPlayer($login)->isAlive = true;
-                $this->playersKOed -= 1;
+                $playerOnServer = false;
+                //check if the player is on the server, for optimization we could use the TeamManager so we don't need to loop on all players
+                foreach($this->maniaControl->getPlayerManager()->getPlayers(true) as $player) {
+                    if ($player->login==$login) {
+                        $playerOnServer=true;
+                    }
+                }
+                if ($playerOnServer) {
+                    $this->maniaControl->getClient()->TriggerModeScriptEvent("Knockout.Revive", [$login]);
+                    $this->reviveTeam->getPlayer($login)->isAlive = true;
+                    $this->playersKOed -= 1;
+                }
+                else {
+                    $this->maniaControl->getChat()->sendSuccess('$z$sThe player to respawn is not on the server!');
+                }
             } catch (InvalidArgumentException $e) {
                 Logger::logError($e->getMessage());
             }
@@ -377,11 +389,11 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
     {
         $this->teamManager->addPlayerToTeam($cbPlayer, 0);
 
-        for ($i = 1; $i <= 11; $i++) {
+        for ($i = 1; $i <= 9; $i++) {
             $this->maniaControl->getClient()->connectFakePlayer();
             $player = $this->maniaControl->getPlayerManager()->getPlayer("*fakeplayer" . $i . "*");
             if ($player !== null) {
-                if ($i<=5) {
+                if ($i>=5) {
                     $this->teamManager->addPlayerToTeam($player, 0);
                 } else {
                     $this->teamManager->addPlayerToTeam($player, 1);
@@ -394,7 +406,7 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
     
     public function test_function2($callback, Player $cbPlayer)
     {
-        for ($i = 1; $i <= 11; $i++) {//put same number as above to end the loop for proper testing
+        for ($i = 1; $i <= 9; $i++) {//put same number as above to end the loop for proper testing
             $this->maniaControl->getClient()->connectFakePlayer();
         }
     }
