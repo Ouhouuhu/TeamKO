@@ -998,7 +998,7 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
         $frame->setPosition(0, 90);
         $frame->setZ(-2);
 
-        $sizeX = 30 * $this->teamManager->getTeamSize();
+        $sizeX = 30 * count($this->teamManager->teams);
 
         $backgroundQuad = new Quad();
         $backgroundQuad->setZ(-1);
@@ -1053,7 +1053,7 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
 
             // Team Name
             $teamnamelabel = new Label();
-            $teamnamelabel->setPosition(0, 5);
+            $teamnamelabel->setPosition(0, 2.5);
             $teamnamelabel->setSize(25, 20);
             $teamnamelabel->setZ(2);
             $teamnamelabel->setTextFont("GameFontBlack");
@@ -1064,7 +1064,7 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
 
             // Players Alive count
             $playercountlabel = new Label();
-            $playercountlabel->setPosition(0, 0);
+            $playercountlabel->setPosition(0, -2.5);
             $playercountlabel->setSize(25, 20);
             $playercountlabel->setZ(2);
             $playercountlabel->setTextFont("GameFontBlack");
@@ -1088,7 +1088,7 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
             $pointslabel->setTextFont("GameFontBlack");
             $pointslabel->setHorizontalAlign($pointslabel::CENTER);
             $pointslabel->setTextSize(3);
-            $pointslabel->setText('$z' . $team->points); // '$z' to display the 0
+            //$pointslabel->setText('$z' . $team->points); // '$z' to display the 0
 
             $rank++;
         }
