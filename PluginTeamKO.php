@@ -98,6 +98,7 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
 
     /** @var Team|null */
     private $reviveTeam = null;
+
     //</editor-fold>
 //<editor-fold desc="ManiaControl declares">
 
@@ -185,12 +186,15 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
 
         // Commands
         $this->maniaControl->getCommandManager()->registerCommandListener('jointeam', $this, 'cmdJoinTeam', false, 'Allow players to join the team they want');
+        $this->maniaControl->getCommandManager()->registerCommandListener('leaveteam', $this, 'cmdLeaveTeam', false, 'Allow players to leave the team');
         $this->maniaControl->getCommandManager()->registerCommandListener('teams', $this, 'cmdGetTeam', true, 'Allow players to see the teams');
         $this->maniaControl->getCommandManager()->registerCommandListener('addteam', $this, 'cmdAddToTeam', true, 'Add players to teams');
+        $this->maniaControl->getCommandManager()->registerCommandListener('kickteam', $this, 'cmdKickFromTeam', true, 'Remove players from teams');
+
         $this->maniaControl->getCommandManager()->registerCommandListener('test', $this, 'test_function', true, 'TEST function, do not use it!');
         $this->maniaControl->getCommandManager()->registerCommandListener('test2', $this, 'test_function2', true, 'TEST function, do not use it!');
-        $this->maniaControl->getCommandManager()->registerCommandListener('purgeteams', $this, 'cmdPurgeTeam', true, 'See player status');
-        $this->maniaControl->getCommandManager()->registerCommandListener('clearteams', $this, 'cmdClearTeam', true, 'See player status');
+        $this->maniaControl->getCommandManager()->registerCommandListener('purgeteams', $this, 'cmdPurgeTeam', true, 'Remove disconnected players');
+        $this->maniaControl->getCommandManager()->registerCommandListener('initteams', $this, 'cmdClearTeam', true, 'Init teams and remove players');
         $this->maniaControl->getCallbackManager()->registerCallbackListener('ManiaPlanet.PlayerChat', $this, 'handlePlayerChat');
 
         $this->initTeams();
@@ -639,6 +643,53 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
     //</editor-fold>
     //<editor-fold desc="Chat commands">
 
+    public function cmdKickFromTeam(array $chatCallback, Player $player)
+    {
+
+
+        if (!$this->maniaControl->getAuthenticationManager()->checkRight($player, AuthenticationManager::AUTH_LEVEL_ADMIN)) {
+            $this->maniaControl->getAuthenticationManager()->sendNotAllowed($player);
+            return;
+        }
+
+        Logger::Log("add_to_team");
+        $text = $chatCallback[1][2];
+        $text = explode(" ", $text);
+
+        if (count($text) < 1) {
+            $this->maniaControl->getChat()->sendError($this->chatPrefix . "Error with the command, you have to use //addteam *number* *players with , to seperate them*!", $player);
+            return;
+        }
+
+        unset($text[0]); //removing command
+
+        $players = [];
+        $players_str = implode("", $text);
+        if (strlen($players_str) > 0) {
+            $players = explode(',', str_replace(' ', '', $players_str));
+        }
+
+        foreach ($players as $login) {
+            $player = $this->maniaControl->getPlayerManager()->getPlayer($login);
+            $team = $this->teamManager->getPlayerTeam($login);
+            if ($team === null) {
+                $this->maniaControl->getChat()->sendError($this->chatPrefix . "Player " . $login . " is not member of any team.", $player);
+                return;
+            }
+
+            $team->removePlayerByLogin($login);
+            $nick = $login;
+
+            if ($player) {
+                $nick = $player->getEscapedNickname();
+            }
+
+            $this->maniaControl->getChat()->sendSuccess($this->chatPrefix . "Player " . $nick . " removed from team " . $team->teamName);
+        }
+
+
+    }
+
     /**
      * @param array $chatCallback
      * @param Player $player
@@ -713,10 +764,36 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
         if (!$this->MatchManagerCore->getMatchStatus()) {
             $this->initTeams();
         } else {
-            $this->maniaControl->getChat()->sendError("Can't clear teams, since match is progressing!");
+            $this->maniaControl->getChat()->sendError($this->chatPrefix . "Can't clear teams, since match is progressing!");
         }
 
         $this->displayManialinks(false);
+    }
+
+    public function cmdLeaveTeam(array $chatCallback, Player $player)
+    {
+        Logger::Log("leave_team");
+        if (!$this->freeTeamMode) {
+            $this->maniaControl->getChat()->sendSuccess($this->chatPrefix . "You're not allowed to join a team yourself, ask an admin!", $player);
+            return;
+        }
+
+        if ($this->MatchManagerCore->getMatchStatus()) {
+            $this->maniaControl->getChat()->sendSuccess($this->chatPrefix . "You can't join a team when a match is running!", $player);
+            return;
+        }
+
+        $team = $this->teamManager->getPlayerTeam($player->login);
+        if ($team === null) {
+            $this->maniaControl->getChat()->sendError($this->chatPrefix . "No team to leave from", $player);
+            return;
+        }
+
+        $team->removePlayer($player);
+        $this->maniaControl->getChat()->sendSuccess($this->chatPrefix . "Player " . $player->getEscapedNickname() . ' has left $o' . $team->teamName, $player);
+
+        $this->displayManialinks(false);
+
     }
 
     public function cmdJoinTeam(array $chatCallback, Player $player)
@@ -748,9 +825,11 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
 
         if ($this->teamManager->addPlayerToTeam($player, $teamNb - 1) === null) {
             $this->maniaControl->getChat()->sendError($this->chatPrefix . "Team $teamNb has too many players!", $player);
+            return;
         }
 
-        $this->maniaControl->getChat()->sendSuccess($this->chatPrefix . "You have joined team $teamNb", $player);
+        $team = $this->teamManager->getPlayerTeam($player->login);
+        $this->maniaControl->getChat()->sendSuccess($this->chatPrefix . "Player " . $player->getEscapedNickname() . ' has joined team $o' . $team->teamName, $player);
 
         $this->displayManialinks(false);
     }
@@ -819,7 +898,7 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
         $playerFrame = new Frame();
         $frame->addChild($playerFrame);
         $playerFrame->setPosition(-0.5, -6);
-        $index =  0;
+        $index = 0;
 
         foreach ($players as $player) {
             $label = new Label();
