@@ -22,4 +22,12 @@ class KoPlayer
         $this->login = $player->login;
     }
 
+    /**
+     * @return string
+     */
+    public function getStatus():string {
+        if (!$this->isConnected) return '$999DC';
+        if ($this->isAlive) return '$0d0Alive';
+        return '$d00KO';
+    }
 }

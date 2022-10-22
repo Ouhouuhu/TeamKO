@@ -55,6 +55,7 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
     const SETTING_RMXTEAMSWIDGET_TEAM_CHATPREFIXS = 'Team chat prefixes';
     const SETTING_RMXTEAMSWIDGET_FREE_TEAM = 'Free team mode';
     const MLID_TEAMKO_WINDOW = 'TeamKOWidget.Window';
+    const MLID_TEAMKO_WIDGET = 'TeamKOWidget.Widget';
     const ACTION_SPECTATE_PLAYER = 'TeamKO.SpectatePlayer';
     const ACTION_CLOSE_WIDGET = 'TeamKO.CloseWidget';
     const ACTION_TEAM1 = 'TeamKO.ToTeam1';
@@ -224,17 +225,16 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
                 Logger::log("reviving:" . $login);
                 $playerOnServer = false;
                 //check if the player is on the server, for optimization we could use the TeamManager so we don't need to loop on all players
-                foreach($this->maniaControl->getPlayerManager()->getPlayers(true) as $player) {
-                    if ($player->login==$login) {
-                        $playerOnServer=true;
+                foreach ($this->maniaControl->getPlayerManager()->getPlayers(true) as $player) {
+                    if ($player->login == $login) {
+                        $playerOnServer = true;
                     }
                 }
                 if ($playerOnServer) {
                     $this->maniaControl->getClient()->TriggerModeScriptEvent("Knockout.Revive", [$login]);
                     $this->reviveTeam->getPlayer($login)->isAlive = true;
                     $this->playersKOed -= 1;
-                }
-                else {
+                } else {
                     $this->maniaControl->getChat()->sendSuccess('$z$sThe player to respawn is not on the server!');
                 }
             } catch (InvalidArgumentException $e) {
@@ -248,18 +248,18 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
         $teamsAlive = [];
         $playersAlive = 0;
         $stopMatch = false;
-        
+
         foreach ($this->teamManager->getTeams() as $team) {
             $playersAlive += $team->getAliveAmount();
             if ($team->getAliveAmount() > 0) {
-                $teamsAlive[]=$team;
+                $teamsAlive[] = $team;
             }
         }
-        
-        if (count($teamsAlive)<=1) {
+
+        if (count($teamsAlive) <= 1) {
             $stopMatch = True;
         }
-        
+
         if ($playersAlive == 1 || $stopMatch) {
             Logger::logInfo("Force Match to End");
             $this->matchRoundNb = -1; // reset matchRoundNumber, so we don't get revives
@@ -393,7 +393,7 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
             $this->maniaControl->getClient()->connectFakePlayer();
             $player = $this->maniaControl->getPlayerManager()->getPlayer("*fakeplayer" . $i . "*");
             if ($player !== null) {
-                if ($i>=5) {
+                if ($i >= 5) {
                     $this->teamManager->addPlayerToTeam($player, 0);
                 } else {
                     $this->teamManager->addPlayerToTeam($player, 1);
@@ -403,7 +403,7 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
 
         $this->MatchManagerCore->onCommandMatchStart([], $cbPlayer);
     }
-    
+
     public function test_function2($callback, Player $cbPlayer)
     {
         for ($i = 1; $i <= 9; $i++) {//put same number as above to end the loop for proper testing
@@ -566,7 +566,7 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
         if (count($json["accountids"]) == 0) { //this means we are in a fake round with any KO
             return;
         }
-        
+
         $this->revivePlayer();
 
         foreach ($json["accountids"] as $accountId) {
@@ -608,7 +608,7 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
         if ($player !== null)
             $player->isConnected = true;
 
-        $this->displayManialinks($player->login);
+        $this->displayManialinks(false);
     }
 
     /**
@@ -625,6 +625,8 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
         if ($player === null)
             return;
         $player->isConnected = false;
+
+        $this->displayManialinks(false);
     }
 
     //</editor-fold>
@@ -777,6 +779,105 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
     }
 
     /**
+     * @param Team $team
+     * @return Frame
+     */
+    private function genTeamFrame(Team $team): Frame
+    {
+
+        $players = $team->getPlayers();
+
+        $frame = new Frame();
+        $frame->setPosition(0, 0);
+
+        $lbl = new Label();
+        $frame->addChild($lbl);
+        $lbl->setText($team->teamName)
+            ->setPosition(15, 0)
+            ->centerAlign()
+            ->setTextSize(2)
+            ->setTextFont("GameFontBlack");
+
+        $quad = new Quad();
+        $frame->addChild($quad);
+        $quad->setSize(30, 0.25)
+            ->setPosition(15, -2.5)
+            ->setBackgroundColor("fff8")
+            ->centerAlign();
+
+        $playerFrame = new Frame();
+        $frame->addChild($playerFrame);
+        $playerFrame->setPosition(-0.5, -6);
+        $index =  0;
+
+        foreach ($players as $player) {
+            $label = new Label();
+            $label->setText($player->player->getEscapedNickname())
+                ->setHorizontalAlign("left")
+                ->setVerticalAlign("center")
+                ->setTextSize(1.5)
+                ->setSize(25, 4)
+                ->setTextFont("GameFontRegular")
+                ->setPosition(10, -($index * 4 - 0.5), 1);
+            $playerFrame->addChild($label);
+
+            $quad = new Quad();
+            $quad->setHorizontalAlign("left")
+                ->setBackgroundColor("0008")
+                ->setSize(25, 3.5)
+                ->setPosition(9.5, -($index * 4), 0);
+            $playerFrame->addChild($quad);
+
+            $label2 = new Label();
+            $label2->setText($player->getStatus())
+                ->setHorizontalAlign("center")
+                ->setVerticalAlign("center")
+                ->setTextSize(1.5)
+                ->setSize(10, 4)
+                ->setTextFont("GameFontSemiBold")
+                ->setPosition(4, -($index * 4 - 0.5), 1);
+            $playerFrame->addChild($label2);
+
+            $quad = new Quad();
+            $quad->centerAlign()
+                ->setBackgroundColor("0008")
+                ->setSize(10, 3.5)
+                ->setPosition(4, -($index * 4), 0);
+            $playerFrame->addChild($quad);
+            $index += 1;
+        }
+
+        return $frame;
+    }
+
+    /**
+     *
+     * @param $login
+     * @return void
+     */
+    public function showTeamWidget($login): void
+    {
+        $maniaLink = new ManiaLink(self::MLID_TEAMKO_WIDGET);
+
+        $frame = new Frame();
+
+        $team1 = $this->genTeamFrame($this->teamManager->getTeam(0));
+        $team1->setPosition(-158, 75);
+
+        $team2 = $this->genTeamFrame($this->teamManager->getTeam(1));
+        $team2->setPosition(128, 75);
+
+        $frame->addChild($team1);
+        $frame->addChild($team2);
+
+        $maniaLink->addChild($frame);
+
+        $this->maniaControl->getManialinkManager()->sendManialink($maniaLink, $login);
+        Logger::logInfo("Display widget");
+
+    }
+
+    /**
      *
      * @param string $login
      * @return void
@@ -863,7 +964,7 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
             } else {
                 $color = '000';
             }
-            $quad->setBackgroundColor($color."7");
+            $quad->setBackgroundColor($color . "7");
 
             $labelNb = new Label();
             $playerFrame->addChild($labelNb);
@@ -931,6 +1032,8 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
      */
     public function displayManialinks($diff)
     {
+        $this->showTeamWidget(null);
+
         $mlBackground = $this->getWidgetBackground();
         $mlData = $this->getWidgetData();
         $login = null;
@@ -1023,6 +1126,7 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
             $this->playersWithML = $playerLogins;
             $this->specsWithML = $specLogins;
         }
+
     }
 
     /**

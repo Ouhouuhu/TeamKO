@@ -31,6 +31,8 @@ class Team
         $koPlayer = new KoPlayer($player);
         if (sizeof($this->players) + 1 <= $this->teamSize) {
             $this->players[$player->login] = $koPlayer;
+            $koPlayer->isAlive = true;
+            $koPlayer->isConnected = true;
             return $koPlayer;
         }
         return null;
