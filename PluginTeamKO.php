@@ -23,6 +23,7 @@ use ManiaControl\Settings\SettingManager;
 use ManiaControl\Commands\CommandListener;
 use Maniaplanet\DedicatedServer\InvalidArgumentException;
 use MatchManagerSuite\MatchManagerCore;
+use ouhouuhu\Classes\Team;
 use ouhouuhu\Classes\TeamManager;
 
 /**
@@ -94,8 +95,8 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
     /** @var integer */
     private $matchRoundNb = -1;
 
-    /** @var string|null */
-    private ?string $reviveLogin = null;
+    /** @var Team|null */
+    private $reviveTeam = null;
     //</editor-fold>
 //<editor-fold desc="ManiaControl declares">
 
@@ -216,14 +217,12 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
 //<editor-fold desc="Helper functions">
     private function revivePlayer()
     {
-        if ($this->reviveLogin !== null) {
+        if ($this->reviveTeam !== null) {
             try {
-                Logger::log("reviving:" . $this->reviveLogin);
-                $this->maniaControl->getClient()->TriggerModeScriptEvent("Knockout.Revive", [$this->reviveLogin]);
-                $team = $this->teamManager->getPlayerTeam($this->reviveLogin);
-                if ($team !== null) {
-                    $team->getPlayer($this->reviveLogin)->isAlive = true;
-                }
+                $login = $this->reviveTeam->getReviveLogin();
+                Logger::log("reviving:" . $login);
+                $this->maniaControl->getClient()->TriggerModeScriptEvent("Knockout.Revive", [$login]);
+                $this->reviveTeam->getPlayer($login)->isAlive = true;
                 $this->playersKOed -= 1;
             } catch (InvalidArgumentException $e) {
                 Logger::logError($e->getMessage());
@@ -490,11 +489,8 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
         $first = \array_shift($array);
 
         if ($first !== null) {
-            $team = $this->teamManager->getPlayerTeam($first->getPlayer()->login);
-            if ($team !== null) {
-                $this->reviveLogin = $team->getReviveLogin();
-                Logger::logInfo($this->reviveLogin);
-            }
+            $this->reviveTeam = $this->teamManager->getPlayerTeam($first->getPlayer()->login);
+
         }
     }
 
@@ -551,9 +547,9 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
             } else {
                 $login = $this->getLoginFromAccountID($accountId);
             }
+
             $team = $this->teamManager->getPlayerTeam($login);
-            if ($team == null)
-                continue;
+            if ($team == null) continue;
             $team->setKnockout($login);
             $this->playersKOed += 1;
         }
