@@ -10,6 +10,8 @@ class Team
     public $teamName;
     /** @var string */
     public $chatPrefix;
+    /** @var string */
+    public $color;
 
     /** @var KoPlayer[] */
     protected $players = [];

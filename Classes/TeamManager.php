@@ -20,6 +20,8 @@ class TeamManager
         $team = new Team();
         $team->teamName = $name;
         $team->chatPrefix = $prefix;
+        $i = strpos($prefix, '$');
+        $team->color = substr($prefix, $i, 4);
         $team->teamSize = $this->teamSize;
         $this->teams[] = $team;
         return $team;
