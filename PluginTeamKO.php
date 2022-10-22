@@ -554,6 +554,8 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
         if (count($json["accountids"]) == 0) { //this means we are in a fake round with any KO
             return;
         }
+        
+        $this->revivePlayer();
 
         foreach ($json["accountids"] as $accountId) {
             if (preg_match("/\*fakeplayer\d+\*/", $accountId)) {
@@ -568,7 +570,6 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
             $this->playersKOed += 1;
         }
 
-        $this->revivePlayer();
 
     }
 

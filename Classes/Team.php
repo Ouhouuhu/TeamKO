@@ -94,7 +94,7 @@ class Team
      */
     public function getReviveLogin(): ?string
     {
-        return array_shift($this->knockedOutLogins);
+        return array_pop($this->knockedOutLogins);
     }
 
     /**
