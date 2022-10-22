@@ -186,6 +186,7 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
         $this->maniaControl->getCommandManager()->registerCommandListener('teams', $this, 'cmdGetTeam', true, 'Allow players to see the teams');
         $this->maniaControl->getCommandManager()->registerCommandListener('addteam', $this, 'cmdAddToTeam', true, 'Add players to teams');
         $this->maniaControl->getCommandManager()->registerCommandListener('test', $this, 'test_function', true, 'TEST function, do not use it!');
+        $this->maniaControl->getCommandManager()->registerCommandListener('test2', $this, 'test_function2', true, 'TEST function, do not use it!');
         $this->maniaControl->getCommandManager()->registerCommandListener('purgeteams', $this, 'cmdPurgeTeam', true, 'See player status');
         $this->maniaControl->getCommandManager()->registerCommandListener('clearteams', $this, 'cmdClearTeam', true, 'See player status');
         $this->maniaControl->getCallbackManager()->registerCallbackListener('ManiaPlanet.PlayerChat', $this, 'handlePlayerChat');
@@ -232,27 +233,29 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
 
     private function checkEndMatch()
     {
-        $winningTeam = null;
+        $teamsAlive = [];
         $playersAlive = 0;
         $stopMatch = false;
-
+        
         foreach ($this->teamManager->getTeams() as $team) {
             $playersAlive += $team->getAliveAmount();
-            if ($team->getAliveAmount() <= 0) {
-                $stopMatch = True;
-            } else {
-                $winningTeam = $team;
+            if ($team->getAliveAmount() > 0) {
+                $teamsAlive[]=$team;
             }
-
         }
-
+        
+        if (count($teamsAlive)<=1) {
+            $stopMatch = True;
+        }
+        
         if ($playersAlive == 1 || $stopMatch) {
             Logger::logInfo("Force Match to End");
             $this->matchRoundNb = -1; // reset matchRoundNumber, so we don't get revives
-            if ($winningTeam !== null) {
+            if (count($teamsAlive) == 1) {
+                $winningTeam = $teamsAlive[0];
                 $this->maniaControl->getChat()->sendSuccess('$z$sTeam $o' . $winningTeam->teamName . '$z$s wins the match!');
             }
-            $this->MatchManagerCore->MatchStop();
+            $this->MatchManagerCore->MatchStop();//we should use MatchEnd() but it's not working for some reasons with MatchEnd
 
         }
 
@@ -374,15 +377,26 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
     {
         $this->teamManager->addPlayerToTeam($cbPlayer, 0);
 
-        for ($i = 1; $i <= 10; $i++) {
+        for ($i = 1; $i <= 11; $i++) {
             $this->maniaControl->getClient()->connectFakePlayer();
             $player = $this->maniaControl->getPlayerManager()->getPlayer("*fakeplayer" . $i . "*");
             if ($player !== null) {
-                $this->teamManager->addPlayerToTeam($player, $i % 2);
+                if ($i<=5) {
+                    $this->teamManager->addPlayerToTeam($player, 0);
+                } else {
+                    $this->teamManager->addPlayerToTeam($player, 1);
+                }
             }
         }
 
         $this->MatchManagerCore->onCommandMatchStart([], $cbPlayer);
+    }
+    
+    public function test_function2($callback, Player $cbPlayer)
+    {
+        for ($i = 1; $i <= 11; $i++) {//put same number as above to end the loop for proper testing
+            $this->maniaControl->getClient()->connectFakePlayer();
+        }
     }
 
     //</editor-fold>
