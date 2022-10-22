@@ -780,6 +780,10 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
             0 => $this->teamManager->getTeam(0)->chatPrefix,
             1 => $this->teamManager->getTeam(1)->chatPrefix
         ];
+        $teamColors = [
+            0 => $this->teamManager->getTeam(0)->color,
+            1 => $this->teamManager->getTeam(1)->color
+        ];
 
         $mainFrame = new Frame();
         $mainFrame->setPosition(-45, 65);
@@ -841,8 +845,13 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
             $playerFrame->addChild($quad);
             $quad->setSize(90, 4)
                 ->setZ(-1)
-                ->setHorizontalAlign("left")
-                ->setBackgroundColor("0007");
+                ->setHorizontalAlign("left");
+            if (is_numeric($team)) {
+                $color = $teamColors[$team];
+            } else {
+                $color = '000';
+            }
+            $quad->setBackgroundColor($color."7");
 
             $labelNb = new Label();
             $playerFrame->addChild($labelNb);
