@@ -18,8 +18,6 @@ class Team
     /** @var string[] */
     protected $knockedOutLogins = [];
     /** @var int */
-    public $points;
-    /** @var int */
     public $teamSize;
 
     /**
@@ -90,7 +88,6 @@ class Team
         $player = $this->getPlayer($login);
         if ($player !== null) $player->isAlive = false;
         array_unshift($this->knockedOutLogins, $login);
-        //$this->knockedOutLogins [] = $login;
     }
 
     /**

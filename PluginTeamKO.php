@@ -171,6 +171,7 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
         $this->maniaControl->getCallbackManager()->registerCallbackListener(Callbacks::TM_SCORES, $this, 'handleEndRoundCallback');
         $this->maniaControl->getCallbackManager()->registerCallbackListener('MatchManager.StartMatch', $this, 'handleMatchManagerStart');
         $this->maniaControl->getCallbackManager()->registerCallbackListener('MatchManager.EndMatch', $this, 'handleMatchManagerEnd');
+        $this->maniaControl->getCallbackManager()->registerCallbackListener('MatchManager.StopMatch', $this, 'handleMatchManagerEnd');
         $this->maniaControl->getCallbackManager()->registerCallbackListener(CallbackManager::CB_MP_PLAYERMANIALINKPAGEANSWER, $this, 'handleManialinkPageAnswer');
         $this->maniaControl->getCallbackManager()->registerScriptCallbackListener(self::RMXTEAMSWIDGET_KO_CALLBACK, $this, 'handleKnockoutCallback');
 
@@ -278,11 +279,6 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
     {
         $this->teamManager->setTeamSize($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_RMXTEAMSWIDGET_MAX_TEAM_SIZE));
         $this->freeTeamMode = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_RMXTEAMSWIDGET_FREE_TEAM);
-        $match_started = $this->MatchManagerCore->getMatchStatus();
-        if ($match_started) {
-            //TODO: say something to the admin
-            return;
-        }
 
         $teamNameStr = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_RMXTEAMSWIDGET_TEAM_NAMES);
         $teamPrefixStr = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_RMXTEAMSWIDGET_TEAM_CHATPREFIXS);
@@ -480,10 +476,11 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
      * @param $dummy
      * @return void
      */
-    public function handleMatchManagerEnd($dummy): void
+    public function handleMatchManagerEnd($dummy, $settings): void
     {
         Logger::Log("MatchManager -> end_match");
-        $this->initTeams();
+        $this->teamManager->resetPlayerStatuses();
+        $this->displayManialinks(false);
     }
 
     /**
@@ -703,7 +700,11 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
             $this->maniaControl->getAuthenticationManager()->sendNotAllowed($player);
             return;
         }
-        $this->initTeams();
+        if (!$this->MatchManagerCore->getMatchStatus()) {
+            $this->initTeams();
+        } else {
+            $this->maniaControl->getChat()->sendError("Can't clear teams, since match is progressing!");
+        }
 
         $this->displayManialinks(false);
     }
