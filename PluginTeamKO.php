@@ -197,6 +197,7 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
         $this->maniaControl->getCommandManager()->registerCommandListener('test2', $this, 'test_function2', true, 'TEST function, do not use it!');
         $this->maniaControl->getCommandManager()->registerCommandListener('purgeteams', $this, 'cmdPurgeTeam', true, 'Remove disconnected players');
         $this->maniaControl->getCommandManager()->registerCommandListener('initteams', $this, 'cmdClearTeam', true, 'Init teams and remove players');
+        $this->maniaControl->getCommandManager()->registerCommandListener('hidegfx', $this, 'cmdHideGfx', true, 'Hides graphics');
         $this->maniaControl->getCallbackManager()->registerCallbackListener('ManiaPlanet.PlayerChat', $this, 'handlePlayerChat');
 
         $this->initTeams();
@@ -293,6 +294,7 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
             $this->matchRoundNb = -1; // reset matchRoundNumber, so we don't get revives
             if (count($teamsAlive) == 1) {
                 $winningTeam = $teamsAlive[0];
+                $this->displayWinningTeam($winningTeam);
                 $this->maniaControl->getChat()->sendSuccess('$z$sTeam $o' . $winningTeam->teamName . '$z$s wins the match!');
             }
             $this->MatchManagerCore->MatchStop(); //we should use MatchEnd() but it's not working for some reasons with MatchEnd
@@ -493,13 +495,55 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
         }
     }
 
+    /**
+     * @param ?Team $team
+     * @return void
+     */
+    private function displayWinningTeam(?Team $team)
+    {
+        $teamName = "unknown";
+        if ($team) {
+            $teamName = addslashes($team->teamName);
+        }
+        $manialink = /** @lang text */
+            <<<EOT
+ <manialink version="3" id="teamKO.Winner">
+    <frame pos="0 10" z-index="201">
+    <label id="winner" pos="0 -9" z-index="3" size="170 25" text="$teamName" halign="center" valign="center2" textsize="28" textfont="GameFontSemiBold" opacity="0.9" textemboss="1"/>
+    <label id="title" pos="0 25" opacity="0.9" z-index="2" size="170 12" text="to the winner of the match" halign="center" valign="center2" textfont="GameFontSemiBold" textsize="8"/>
+    <label pos="0 37" z-index="2" size="258 45.8" text="\$tCongratulations!" halign="center" valign="center2" textfont="GameFontBlack" textsize="20" opacity="0.9" hidden=""/>
+    
+    <quad pos="109 0" z-index="0" size="216 80.4" opacity="0.6" halign="center" valign="center" image="file://Media/Manialinks/Nadeo/TMNext/Menus/PageProfile/UI_profile_background_map_lights.dds"  scale="2" hidden="1"/>
+    </frame>
+
+    <quad z-index="200" image="file://Media/Manialinks/Nadeo/TMNext/Menus/PageMatchmakingMain/Background/B_Night.dds" pos="52.1 -28.3" halign="center" valign="center2" size="360 180"  modulatecolor="" keepratio="Fit" scale="2"/>
+ 
+    <script><!--
+    #Include "MathLib" as ML
+    
+    main() {
+        declare CMlLabel winner <=> (Page.GetFirstChild("winner") as CMlLabel);
+        while(True) {
+                yield;
+                winner.RelativeScale = (1 + ML::Sin(Now*1.0 / 500) / 8);
+                winner.RelativeRotation = (ML::Sin(Now*1.0 / 500) / 4) * 20.;
+      }
+        
+    }
+    --></script>
+</manialink>
+EOT;
+
+        $this->maniaControl->getManialinkManager()->sendManialink($manialink);
+    }
+
     private function displayReviveNotification($login): void
     {
 
         if ($this->reviveTeam === null || $login === null) return;
 
-        $nick = $this->reviveTeam->getPlayer($login)->player->getEscapedNickname();
-        $team = $this->reviveTeam->teamName;
+        $nick = addslashes($this->reviveTeam->getPlayer($login)->player->getEscapedNickname());
+        $team = addslashes($this->reviveTeam->teamName);
 
         $manialink = /** @lang text */
             <<<EOT
@@ -528,22 +572,22 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
         declare CMlFrame frame3 = (Page.GetFirstChild("framePlayer1") as CMlFrame);
         declare CMlFrame frame4= (Page.GetFirstChild("framePlayer2") as CMlFrame);
         
-        AnimMgr.Add(frame1.Controls[0], """<elem pos="0 0"/>""", Now, 1500, CAnimManager::EAnimManagerEasing::ElasticOut);
-        AnimMgr.Add(frame2.Controls[0], """<elem pos="0 -1"/>""", Now, 1500, CAnimManager::EAnimManagerEasing::ElasticOut);
-        AnimMgr.Add(frame2.Controls[1], """<elem pos="0 0"/>""", Now, 1500, CAnimManager::EAnimManagerEasing::ElasticOut);
-    
-        AnimMgr.Add(frame1.Controls[0], """<elem pos="0 -13"/>""", Now+1700, 1500, CAnimManager::EAnimManagerEasing::ElasticOut);
-        AnimMgr.Add(frame2.Controls[0], """<elem pos="0 13"/>""", Now+1700, 1500, CAnimManager::EAnimManagerEasing::ElasticOut);
-        AnimMgr.Add(frame2.Controls[1], """<elem pos="0 13"/>""", Now+1700, 1500, CAnimManager::EAnimManagerEasing::ElasticOut);
+        AnimMgr.Add(frame1.Controls[0], """<elem pos="0 0"/>""", Now, 1000, CAnimManager::EAnimManagerEasing::ElasticOut);
+	    AnimMgr.Add(frame2.Controls[0], """<elem pos="0 -1"/>""", Now, 1000, CAnimManager::EAnimManagerEasing::ElasticOut);
+	    AnimMgr.Add(frame2.Controls[1], """<elem pos="0 0"/>""", Now, 1000, CAnimManager::EAnimManagerEasing::ElasticOut);
+
+        AnimMgr.Add(frame1.Controls[0], """<elem pos="0 -12"/>""", Now+1500, 1000, CAnimManager::EAnimManagerEasing::ElasticOut);
+        AnimMgr.Add(frame2.Controls[0], """<elem pos="0 12"/>""", Now+1500, 1000, CAnimManager::EAnimManagerEasing::ElasticOut);
+        AnimMgr.Add(frame2.Controls[1], """<elem pos="0 12"/>""", Now+1500, 1000, CAnimManager::EAnimManagerEasing::ElasticOut);
         
-        AnimMgr.Add(frame3.Controls[0], """<elem pos="0 0"/>""", Now+2500, 1500, CAnimManager::EAnimManagerEasing::ElasticOut);
-        AnimMgr.Add(frame4.Controls[0], """<elem pos="0 0"/>""", Now+2500, 1500, CAnimManager::EAnimManagerEasing::ElasticOut);
+        AnimMgr.Add(frame3.Controls[0], """<elem pos="0 0"/>""", Now+2000, 1500, CAnimManager::EAnimManagerEasing::ElasticOut);
+        AnimMgr.Add(frame4.Controls[0], """<elem pos="0 0"/>""", Now+2000, 1500, CAnimManager::EAnimManagerEasing::ElasticOut);
     }
     --></script>
     </manialink>
 EOT;
 
-        $this->maniaControl->getManialinkManager()->sendManialink($manialink, null, 6000);
+        $this->maniaControl->getManialinkManager()->sendManialink($manialink, null, 5000);
 
     }
     //</editor-fold>
@@ -606,7 +650,7 @@ EOT;
         //move to spectator players without teams
         foreach ($this->maniaControl->getPlayerManager()->getPlayers(true) as $player) {
             $team = $this->teamManager->getPlayerTeam($player->login);
-            if ($team==null) {
+            if ($team == null) {
                 $this->maniaControl->getClient()->forceSpectator($player, 1);
             }
         }
@@ -644,6 +688,17 @@ EOT;
 
     public function handleEndRoundCallback(OnScoresStructure $structure): void
     {
+        Logger::logInfo("!" . $structure->getSection());
+
+        if ($structure->getSection() == "EndMap") {
+            try {
+                $this->maniaControl->getClient()->sendHideManialinkPage(null, "teamKO.Winner");
+            } catch (Exception $e) {
+                Logger::logError($e->getMessage());
+            }
+            return;
+        }
+
         $matchStatus = $this->MatchManagerCore->getMatchStatus();
         if (!$matchStatus) return;
 
@@ -651,9 +706,11 @@ EOT;
             $this->checkEndMatch();
             return;
         }
+
         if ($structure->getSection() != "PreEndRound") {
             return;
         }
+
 
         Logger::logInfo($structure->getSection());
 
@@ -740,28 +797,28 @@ EOT;
     {
         Logger::Log("handlePlayerConnect");
         $matchStatus = $this->MatchManagerCore->getMatchStatus();
+        $this->displayManialinks();
 
         if ($this->freeTeamMode && !$matchStatus) {
             $this->maniaControl->getChat()->sendSuccess($this->chatPrefix . "Use /jointeam *number* to join the team you want!", $player);
         }
 
         $team = $this->teamManager->getPlayerTeam($player->login);
-        if ($team === null)
+        if ($team === null) {
+            if ($matchStatus) {
+                try {
+                    $this->maniaControl->getClient()->forceSpectator($player, 1);
+                } catch (Exception $ex) {
+                    Logger::logError($ex->getMessage());
+                }
+            }
             return;
+        }
 
         $player = $team->getPlayer($player->login);
         if ($player !== null)
             $player->isConnected = true;
 
-        if ($matchStatus && !$player) {
-            try {
-                $this->maniaControl->getClient()->forceSpectator($player, 1);
-            } catch (Exception $ex) {
-                Logger::logError($ex->getMessage());
-            }
-        }
-
-        $this->displayManialinks(false);
     }
 
     /**
@@ -830,7 +887,10 @@ EOT;
         }
 
     }
-
+    public function cmdHideGfx(array $chatCallback, Player $player)
+    {
+        $this->maniaControl->getClient()->sendHideManialinkPage(null, "teamKO.Winner");
+    }
     /**
      * @param array $chatCallback
      * @param Player $player
@@ -1263,7 +1323,7 @@ EOT;
                 }
 
                 $rgb = ColorLib::hsl2rgb($hsl[0], $hsl[1], $hsl[2]);
-                $fixedColor = $this->fn(dechex($rgb[0])). $this->fn(dechex($rgb[1])) . $this->fn(dechex($rgb[2]));
+                $fixedColor = $this->fn(dechex($rgb[0])) . $this->fn(dechex($rgb[1])) . $this->fn(dechex($rgb[2]));
 
                 $button->setText($teamInfo->chatPrefix)
                     ->setTextSize(1)
