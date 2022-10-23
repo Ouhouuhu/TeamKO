@@ -222,25 +222,46 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
 
 //</editor-fold>
 //<editor-fold desc="Helper functions">
+
+    private function purgeTeams()
+    {
+        foreach ($this->teamManager->getTeams() as $team) {
+            foreach ($team->getPlayers() as $player) {
+                if (!$player->isConnected)
+                    $team->removePlayerByLogin($player->login);
+            }
+        }
+    }
+
     private function revivePlayer()
     {
         if ($this->reviveTeam !== null) {
             try {
                 $login = $this->reviveTeam->getReviveLogin();
-                Logger::log("reviving:" . $login);
+                if ($login === null) {
+                    Logger::logWarning("Tried to revive player, but was unable to find login!");
+                    return;
+                }
+
                 $playerOnServer = false;
-                //check if the player is on the server, for optimization we could use the TeamManager so we don't need to loop on all players
-                foreach ($this->maniaControl->getPlayerManager()->getPlayers(true) as $player) {
+                //check if the player is on the server for optimization we could use the TeamManager, so we don't need to loop on all players
+                foreach ($this->maniaControl->getPlayerManager()->getPlayers() as $player) {
                     if ($player->login == $login) {
                         $playerOnServer = true;
+                        break;
                     }
                 }
+
                 if ($playerOnServer) {
                     $this->maniaControl->getClient()->TriggerModeScriptEvent("Knockout.Revive", [$login]);
-                    $this->reviveTeam->getPlayer($login)->isAlive = true;
+                    $player = $this->reviveTeam->getPlayer($login);
+                    $player->isAlive = true;
                     $this->playersKOed -= 1;
+                    Logger::logInfo("Revived " . $player->player->getEscapedNickname());
+                    $this->displayReviveNotification($login);
                 } else {
-                    $this->maniaControl->getChat()->sendSuccess('$z$sThe player to respawn is not on the server!');
+                    $this->maniaControl->getChat()->sendError($this->chatPrefix . 'The player to revive is not anymore on the server!');
+                    $this->reviveTeam->getPlayer($login)->isConnected = false;
                 }
             } catch (InvalidArgumentException $e) {
                 Logger::logError($e->getMessage());
@@ -272,7 +293,8 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
                 $winningTeam = $teamsAlive[0];
                 $this->maniaControl->getChat()->sendSuccess('$z$sTeam $o' . $winningTeam->teamName . '$z$s wins the match!');
             }
-            $this->MatchManagerCore->MatchStop();//we should use MatchEnd() but it's not working for some reasons with MatchEnd
+            $this->MatchManagerCore->MatchStop(); //we should use MatchEnd() but it's not working for some reasons with MatchEnd
+            $this->checkPlayerStatuses();
 
         }
 
@@ -306,6 +328,7 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
         }
 
         $this->teamManager->removeTeams();
+
         foreach ($teamNames as $i => $teamName) {
             $this->teamManager->addTeam($teamName, $teamPrefixes[$i]);
         }
@@ -382,6 +405,19 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
         }
     }
 
+    private function checkPlayerStatuses()
+    {
+        foreach ($this->teamManager->getTeams() as $team) {
+            foreach ($team->getPlayers() as $teamPlayer) {
+                $player = $this->maniaControl->getPlayerManager()->getPlayer($teamPlayer->login, true);
+                $teamPlayer->isConnected = true;
+                if ($player === null) {
+                    $teamPlayer->isConnected = false;
+                }
+            }
+        }
+    }
+
     /**
      * Reset players alive status at Match Start
      */
@@ -416,11 +452,64 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
             return;
         }
 
-        for ($i = 1; $i <= 9; $i++) {//put same number as above to end the loop for proper testing
+        for ($i = 1; $i <= 9; $i++) {//put same number than above to end the loop for proper testing
             $this->maniaControl->getClient()->connectFakePlayer();
         }
     }
 
+    private function displayReviveNotification($login): void
+    {
+
+        if ($this->reviveTeam === null || $login === null) return;
+
+        $nick = $this->reviveTeam->getPlayer($login)->player->getEscapedNickname();
+        $team = $this->reviveTeam->teamName;
+
+        $manialink = /** @lang text */
+            <<<EOT
+    <manialink version="3" id="teamKO.revive">
+        <frame pos="0 -5">
+            <frame size="100 12" pos="0 0" valign="center" halign="center" id="frameRevive1">
+                <label pos="0 -12" z-index="0" size="100 12" text="PLAYER" textfont="GameFontSemiBold" halign="center" valign="center2" textsize="12"/>
+            </frame>
+            <frame size="100 12" pos="0 -12" valign="center" halign="center" id="frameRevive2">
+                <label pos="0 12" z-index="1" size="100 12" text="R E V I V E S" textfont="GameFontBlack" halign="center" valign="center2" textsize="12"/>
+                <quad pos="0 12" z-Index="0" size="102 12" bgcolor="00D27BFF" opacity="1" valign="center" halign="center"/>
+            </frame>
+            <frame size="100 12" pos="0 0" valign="center" halign="center" id="framePlayer1">
+                <label pos="0 -12" size="100 12" halign="center" valign="center2" textfont="GameFontBlack" text="$nick" textemboss="1" textsize="12" textprefix="\$t" opacity="1"/>
+            </frame>
+                <frame size="100 12" pos="0 -8" valign="center" halign="center" id="framePlayer2">
+                <label pos="0 12" size="100 7" halign="center" valign="center2" textfont="GameFontBlack" text="$team" textemboss="1" textsize="4" opacity="1"/>
+            </frame>
+        </frame>
+    
+    <script><!-- 
+    
+    main() {
+        declare CMlFrame frame1 = (Page.GetFirstChild("frameRevive1") as CMlFrame);
+        declare CMlFrame frame2 = (Page.GetFirstChild("frameRevive2") as CMlFrame);
+        declare CMlFrame frame3 = (Page.GetFirstChild("framePlayer1") as CMlFrame);
+        declare CMlFrame frame4= (Page.GetFirstChild("framePlayer2") as CMlFrame);
+        
+        AnimMgr.Add(frame1.Controls[0], """<elem pos="0 0"/>""", Now, 1500, CAnimManager::EAnimManagerEasing::ElasticOut);
+        AnimMgr.Add(frame2.Controls[0], """<elem pos="0 -1"/>""", Now, 1500, CAnimManager::EAnimManagerEasing::ElasticOut);
+        AnimMgr.Add(frame2.Controls[1], """<elem pos="0 0"/>""", Now, 1500, CAnimManager::EAnimManagerEasing::ElasticOut);
+    
+        AnimMgr.Add(frame1.Controls[0], """<elem pos="0 -13"/>""", Now+1700, 1500, CAnimManager::EAnimManagerEasing::ElasticOut);
+        AnimMgr.Add(frame2.Controls[0], """<elem pos="0 13"/>""", Now+1700, 1500, CAnimManager::EAnimManagerEasing::ElasticOut);
+        AnimMgr.Add(frame2.Controls[1], """<elem pos="0 13"/>""", Now+1700, 1500, CAnimManager::EAnimManagerEasing::ElasticOut);
+        
+        AnimMgr.Add(frame3.Controls[0], """<elem pos="0 0"/>""", Now+2500, 1500, CAnimManager::EAnimManagerEasing::ElasticOut);
+        AnimMgr.Add(frame4.Controls[0], """<elem pos="0 0"/>""", Now+2500, 1500, CAnimManager::EAnimManagerEasing::ElasticOut);
+    }
+    --></script>
+    </manialink>
+EOT;
+
+        $this->maniaControl->getManialinkManager()->sendManialink($manialink, null, 6000);
+
+    }
     //</editor-fold>
     //<editor-fold desc="Callbacks">
 
@@ -470,19 +559,26 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
      */
     public function handleStartMatch($dummy): void
     {
-
+        $matchStarted = $this->MatchManagerCore->getMatchStatus();
+        if ($matchStarted) {
+            $this->checkPlayerStatuses();
+            $this->displayManialinks(false);
+        }
     }
 
     public function handleMatchManagerStart($matchid, $settings)
     {
         Logger::logInfo("start_match");
         $this->matchRoundNb = -1;
+        $this->checkPlayerStatuses();
+        $this->purgeTeams();
         $this->teamManager->resetPlayerStatuses();
         $this->playersKOed = 0;
         $this->playersAtStart = 0;
         foreach ($this->teamManager->getTeams() as $team) {
             $this->playersAtStart += sizeof($team->getPlayers());
         }
+
         $this->displayManialinks(false);
     }
 
@@ -592,7 +688,6 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
             $team->setKnockout($login);
             $this->playersKOed += 1;
         }
-
 
     }
 
@@ -745,13 +840,7 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
             return;
         }
 
-        foreach ($this->teamManager->getTeams() as $team) {
-            foreach ($team->getPlayers() as $player) {
-                if (!$player->isConnected)
-                    $team->removePlayerByLogin($player->login);
-            }
-        }
-
+        $this->purgeTeams();
         $this->displayManialinks(false);
     }
 
@@ -951,14 +1040,17 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
 
         $frame = new Frame();
 
-        $team1 = $this->genTeamFrame($this->teamManager->getTeam(0));
-        $team1->setPosition(-158, 75);
-
-        $team2 = $this->genTeamFrame($this->teamManager->getTeam(1));
-        $team2->setPosition(128, 75);
-
-        $frame->addChild($team1);
-        $frame->addChild($team2);
+        $posCounter = -1;
+        foreach ($this->teamManager->getTeams() as $i => $team) {
+            $teamFrame = $this->genTeamFrame($team);
+            if ($i % 2 == 0) {
+                $posCounter += 1;
+                $teamFrame->setPosition(-158 + (32 * $posCounter), 75);
+            } else {
+                $teamFrame->setPosition(128 - (32 * $posCounter), 75);
+            }
+            $frame->addChild($teamFrame);
+        }
 
         $maniaLink->addChild($frame);
 
