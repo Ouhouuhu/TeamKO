@@ -600,6 +600,13 @@ EOT;
         Logger::logInfo("start_match");
         $this->matchRoundNb = -1;
         $this->checkPlayerStatuses();
+        //move to spectator players without teams
+        foreach ($this->maniaControl->getPlayerManager()->getPlayers(true) as $player) {
+            $team = $this->teamManager->getPlayerTeam($player->login);
+            if ($team==null) {
+                $this->maniaControl->getClient()->forceSpectator($player, 1);
+            }
+        }
         $this->purgeTeams();
         $this->teamManager->resetPlayerStatuses();
         $this->playersKOed = 0;
