@@ -24,6 +24,7 @@ use ManiaControl\Commands\CommandListener;
 use Maniaplanet\DedicatedServer\InvalidArgumentException;
 use MatchManagerSuite\MatchManagerCore;
 use ouhouuhu\Classes\Team;
+use ouhouuhu\Classes\ColorLib;
 use ouhouuhu\Classes\TeamManager;
 
 /**
@@ -59,8 +60,7 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
     const MLID_TEAMKO_WIDGET = 'TeamKOWidget.Widget';
     const ACTION_SPECTATE_PLAYER = 'TeamKO.SpectatePlayer';
     const ACTION_CLOSE_WIDGET = 'TeamKO.CloseWidget';
-    const ACTION_TEAM1 = 'TeamKO.ToTeam1';
-    const ACTION_TEAM2 = 'TeamKO.ToTeam2';
+    const ACTION_TEAM = 'TeamKO.ToTeam';
     const ACTION_REMOVE = 'TeamKO.Remove';
 
     /*
@@ -415,6 +415,13 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
         }
     }
 
+    /** format number */
+    private function fn(string $number)
+    {
+        if (hexdec($number) < 10) return "0" . $number;
+        return $number;
+    }
+
     /**
      * Update Widgets on Setting Changes
      *
@@ -550,7 +557,7 @@ EOT;
     public function handleManialinkPageAnswer(array $callback)
     {
         $actionId = $callback[1][2];
-        $actionArray = explode('.', $actionId, 3);
+        $actionArray = explode('.', $actionId);
         if (count($actionArray) < 2) {
             return;
         }
@@ -565,12 +572,8 @@ EOT;
                 case self::ACTION_CLOSE_WIDGET:
                     $this->closeTeamWindow($login);
                     break;
-                case self::ACTION_TEAM1:
-                    $this->addPlayerToTeam($targetLogin, 1);
-                    $this->showTeamWindow($login);
-                    break;
-                case self::ACTION_TEAM2:
-                    $this->addPlayerToTeam($targetLogin, 2);
+                case self::ACTION_TEAM:
+                    $this->addPlayerToTeam($targetLogin, ($actionArray[3] + 1));
                     $this->showTeamWindow($login);
                     break;
                 case self::ACTION_REMOVE:
@@ -1139,28 +1142,21 @@ EOT;
         foreach ($this->maniaControl->getPlayerManager()->getPlayers(true) as $player) {
             $players[$player->login] = $player;
         }
+        $width = 75;
 
-        foreach ($this->teamManager->getTeams() as $teamIndex => $team) {
-            foreach ($team->getPlayers() as $player) {
+        foreach ($this->teamManager->getTeams() as $teamIndex => $button) {
+            $width += 10;
+            foreach ($button->getPlayers() as $player) {
                 $players[$player->login] = $player->player;
             }
         }
-
-        $teamPrefixes = [
-            0 => $this->teamManager->getTeam(0)->chatPrefix,
-            1 => $this->teamManager->getTeam(1)->chatPrefix
-        ];
-        $teamColors = [
-            0 => $this->teamManager->getTeam(0)->color,
-            1 => $this->teamManager->getTeam(1)->color
-        ];
 
         $mainFrame = new Frame();
         $mainFrame->setPosition(-45, 65);
 
         $quad = new Quad();
         $mainFrame->addChild($quad);
-        $quad->setSize(95, 120)
+        $quad->setSize($width, 120)
             ->setY(5)
             ->setHorizontalAlign("left")
             ->setVerticalAlign("top")
@@ -1168,7 +1164,7 @@ EOT;
 
         $quad2 = new Quad();
         $mainFrame->addChild($quad2);
-        $quad2->setSize(95, 5)
+        $quad2->setSize($width, 5)
             ->setY(5)
             ->setHorizontalAlign("left")
             ->setVerticalAlign("top")
@@ -1191,7 +1187,7 @@ EOT;
             ->setSize(5, 5)
             ->setAreaColor("900")
             ->setAreaFocusColor("f00")
-            ->setPosition(92.5, 2.5);
+            ->setPosition($width - 2.5, 2.5);
 
 
         $teamFrame = new Frame();
@@ -1199,14 +1195,14 @@ EOT;
         $mainFrame->addChild($teamFrame);
 
         $playerIndex = -1;
-        foreach ($players as $playerLogin => $player) {
+        foreach ($players as $player) {
             $playerIndex += 1;
-            $team = $this->teamManager->getPlayerTeam($player->login);
+            $button = $this->teamManager->getPlayerTeam($player->login);
             $color = "000";
             $prefix = "";
-            if ($team !== null) {
-                $color = $team->color;
-                $prefix = $team->chatPrefix;
+            if ($button !== null) {
+                $color = $button->color;
+                $prefix = $button->chatPrefix;
             }
 
             if ($this->maniaControl->getPlayerManager()->getPlayer($player->login, true) == null) {
@@ -1219,7 +1215,8 @@ EOT;
 
             $quad = new Quad();
             $playerFrame->addChild($quad);
-            $quad->setSize(90, 4)
+            $quad->setSize($width, 4)
+                ->setX(-2.5)
                 ->setZ(-1)
                 ->setHorizontalAlign("left")
                 ->setBackgroundColor($color . "3");
@@ -1244,36 +1241,42 @@ EOT;
                 ->setTextSize(1.5)
                 ->setTextFont("GameFontSemiBold")
                 ->setTextEmboss(true);
+            $offset = 0;
+            foreach ($this->teamManager->getTeams() as $index => $teamInfo) {
+                $button = new Label_Button();
+                $playerFrame->addChild($button);
+                $offset = ($index * 11);
+                $button->addActionTriggerFeature(self::ACTION_TEAM . "." . $player->login . "." . $teamInfo->id);
+                $color = str_split($teamInfo->color);
+                $hsl = ColorLib::rgb2hsl(hexdec($color[0]) * 16, hexdec($color[1]) * 16, hexdec($color[2]) * 16);
 
-            $team1 = new Label_Button();
-            $playerFrame->addChild($team1);
-            $team1->addActionTriggerFeature(self::ACTION_TEAM1 . "." . $player->login);
-            $team1->setText($teamPrefixes[0])
-                ->setTextSize(1)
-                ->setAreaFocusColor("777")
-                ->setAreaColor("000")
-                ->setSize(10, 4)
-                ->setX(60);
+                $hsl[2] -= 0.3;
+                if ($hsl[2] < 0) {
+                    $hsl[2] = 0;
+                }
 
-            $team2 = new Label_Button();
-            $playerFrame->addChild($team2);
-            $team2->addActionTriggerFeature(self::ACTION_TEAM2 . "." . $player->login);
-            $team2->setText($teamPrefixes[1])
-                ->setTextSize(1)
-                ->setAreaFocusColor("777")
-                ->setAreaColor("000")
-                ->setSize(10, 4)
-                ->setX(71);
+                $rgb = ColorLib::hsl2rgb($hsl[0], $hsl[1], $hsl[2]);
+                $fixedColor = $this->fn(dechex($rgb[0])). $this->fn(dechex($rgb[1])) . $this->fn(dechex($rgb[2]));
+
+                $button->setText($teamInfo->chatPrefix)
+                    ->setTextSize(1)
+                    ->setAreaFocusColor($fixedColor)
+                    ->setAreaColor("000")
+                    ->setOpacity(0.9)
+                    ->setSize(10, 4)
+                    ->setX(60 + $offset);
+            }
 
             $team2 = new Label_Button();
             $playerFrame->addChild($team2);
             $team2->addActionTriggerFeature(self::ACTION_REMOVE . "." . $player->login);
             $team2->setText("Remove")
                 ->setTextSize(1)
-                ->setAreaFocusColor("777")
-                ->setAreaColor("000")
+                ->setAreaFocusColor("f00")
+                ->setAreaColor("700")
                 ->setSize(10, 4)
-                ->setX(82);
+                ->setOpacity(0.9)
+                ->setX(60 + ($offset + 11));
         }
 
         $maniaLink->addChild($mainFrame);
