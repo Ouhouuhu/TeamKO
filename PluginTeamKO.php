@@ -743,6 +743,14 @@ EOT;
         if ($player !== null)
             $player->isConnected = true;
 
+        if ($matchStatus && !$player) {
+            try {
+                $this->maniaControl->getClient()->forceSpectator($player, 1);
+            } catch (Exception $ex) {
+                Logger::logError($ex->getMessage());
+            }
+        }
+
         $this->displayManialinks(false);
     }
 
@@ -810,7 +818,6 @@ EOT;
 
             $this->maniaControl->getChat()->sendSuccess($this->chatPrefix . "Player " . $nick . " removed from team " . $team->teamName);
         }
-
 
     }
 
@@ -1014,7 +1021,7 @@ EOT;
         $playerFrame->addChild($quad);
 
         $label2 = new Label();
-        $label2->setText($player->getStatus().$koQueue)
+        $label2->setText($player->getStatus() . $koQueue)
             ->setHorizontalAlign("center")
             ->setVerticalAlign("center")
             ->setTextSize(1.5)
@@ -1082,7 +1089,7 @@ EOT;
         }
 
         foreach ($arrayKo as $ko => $player) {
-            $this->genPlayerInfo($index, $player, $playerFrame, ($ko+1));
+            $this->genPlayerInfo($index, $player, $playerFrame, ($ko + 1));
             $index += 1;
         }
 
