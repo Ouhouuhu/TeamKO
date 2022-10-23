@@ -6,6 +6,8 @@ use ManiaControl\Players\Player;
 
 class Team
 {
+    /** @var integer */
+    public $id;
     /** @var string */
     public $teamName;
     /** @var string */
@@ -81,6 +83,19 @@ class Team
     public function resetKnockout(): void
     {
         $this->knockedOutLogins = [];
+    }
+
+    /**
+     * @return array|null
+     */
+    public function getKnockoutOrder(): array
+    {
+        $logins = array_reverse($this->knockedOutLogins);
+        $out = [];
+        foreach ($logins as $i => $login) {
+            $out[$login] = $i;
+        }
+        return $out;
     }
 
     public function setKnockout(string $login)

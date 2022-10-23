@@ -13,16 +13,17 @@ class TeamManager
     /**
      * @param string $name
      * @param string $prefix
+     * @param string $color
      * @return Team
      */
-    public function addTeam(string $name, string $prefix): Team
+    public function addTeam(string $name, string $prefix, string $color): Team
     {
         $team = new Team();
         $team->teamName = $name;
         $team->chatPrefix = $prefix;
-        $i = strpos($prefix, '$');
-        $team->color = substr($prefix, $i+1, 3);
+        $team->color = $color;
         $team->teamSize = $this->teamSize;
+        $team->id = sizeof($this->teams);
         $this->teams[] = $team;
         return $team;
     }
@@ -92,7 +93,6 @@ class TeamManager
     public function resetPlayerStatuses()
     {
         foreach ($this->teams as $team) {
-            $team->points = 0;
             $team->resetKnockout();
             foreach ($team->getPlayers() as $player) {
                 $player->isAlive = true;

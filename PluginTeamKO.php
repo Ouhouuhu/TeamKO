@@ -53,6 +53,7 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
     const SETTING_RMXTEAMSWIDGET_MAX_TEAM_SIZE = 'Maximum number of players per team';
     const SETTING_RMXTEAMSWIDGET_TEAM_NAMES = 'Team names';
     const SETTING_RMXTEAMSWIDGET_TEAM_CHATPREFIXS = 'Team chat prefixes';
+    const SETTING_RMXTEAMSWIDGET_TEAM_COLORS = 'Team colors';
     const SETTING_RMXTEAMSWIDGET_FREE_TEAM = 'Free team mode';
     const MLID_TEAMKO_WINDOW = 'TeamKOWidget.Window';
     const MLID_TEAMKO_WIDGET = 'TeamKOWidget.Widget';
@@ -182,6 +183,7 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_RMXTEAMSWIDGET_SHOWSPECTATORS, true, "Display widget for spectators");
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_RMXTEAMSWIDGET_TEAM_NAMES, '$f00Team 1, $0f0Team 2', "Name of the teams");
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_RMXTEAMSWIDGET_TEAM_CHATPREFIXS, '$f00T1, $0f0T2', "Team prefixs");
+        $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_RMXTEAMSWIDGET_TEAM_COLORS, 'f00, 0f0', "Team Colors");
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_RMXTEAMSWIDGET_FREE_TEAM, true, "Tells if teams are made by admins or if players can join the team they want");
 
         // Commands
@@ -294,10 +296,8 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
                 $this->maniaControl->getChat()->sendSuccess('$z$sTeam $o' . $winningTeam->teamName . '$z$s wins the match!');
             }
             $this->MatchManagerCore->MatchStop(); //we should use MatchEnd() but it's not working for some reasons with MatchEnd
-            $this->checkPlayerStatuses();
-
         }
-
+        $this->checkPlayerStatuses();
         $this->displayManialinks(true);
     }
 
@@ -308,9 +308,11 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
 
         $teamNameStr = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_RMXTEAMSWIDGET_TEAM_NAMES);
         $teamPrefixStr = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_RMXTEAMSWIDGET_TEAM_CHATPREFIXS);
+        $teamColorStr = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_RMXTEAMSWIDGET_TEAM_COLORS);
 
         $teamNames = [];
         $teamPrefixes = [];
+        $teamColors = [];
 
         if (strlen($teamNameStr) > 0) {
             $teamNames = explode(',', str_replace(' ', '', $teamNameStr));
@@ -318,19 +320,27 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
         if (strlen($teamPrefixStr) > 0) {
             $teamPrefixes = explode(',', str_replace(' ', '', $teamPrefixStr));
         }
+        if (strlen($teamColorStr) > 0) {
+            $teamColors = explode(',', str_replace(' ', '', $teamColorStr));
+        }
 
         if (count($teamNames) != count($teamPrefixes)) {
             $this->maniaControl->getChat()->sendError('There is an error in team number!');
             return;
         }
-        if (count($teamNames) > 6) {
-            $this->maniaControl->getChat()->sendError('There are many teams, UI might not be optimal!');
+        if (count($teamNames) != count($teamColors)) {
+            $this->maniaControl->getChat()->sendError('There is an error in team number!');
+            return;
+        }
+
+        if (count($teamNames) > 4) {
+            $this->maniaControl->getChat()->sendError('There are too many teams, UI might not be optimal!');
         }
 
         $this->teamManager->removeTeams();
 
         foreach ($teamNames as $i => $teamName) {
-            $this->teamManager->addTeam($teamName, $teamPrefixes[$i]);
+            $this->teamManager->addTeam($teamName, $teamPrefixes[$i], str_replace('$', '', $teamColors[$i]));
         }
     }
 
@@ -362,17 +372,32 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
         return vsprintf("%s%s-%s-%s-%s-%s%s%s", str_split(bin2hex($login), 4));
     }
 
-    private function addPlayerToTeam(string $login, int $team)
+    /**
+     * @param string|null $login
+     * @param int $team
+     * @return void
+     */
+    private function addPlayerToTeam(?string $login, int $team)
     {
-        $player = $this->maniaControl->getPlayerManager()->getPlayer($login, true);
-        $matchStarted = $this->MatchManagerCore->getMatchStatus();
-        if ($matchStarted) {
-            $this->maniaControl->getChat()->sendError($this->chatPrefix . " Can't add player to team $team, match is alreadys started.");
+        if ($login === null) {
             return;
         }
+
+        $player = $this->maniaControl->getPlayerManager()->getPlayer($login, true);
+        if ($player === null) {
+            $this->maniaControl->getChat()->sendError($this->chatPrefix . "Can't find player at server, disconnected?");
+            return;
+        }
+
+        $matchStarted = $this->MatchManagerCore->getMatchStatus();
+        if ($matchStarted) {
+            $this->maniaControl->getChat()->sendError($this->chatPrefix . "Can't add player to team $team, match is already started.");
+            return;
+        }
+
         $koPlayer = $this->teamManager->addPlayerToTeam($player, $team - 1);
         if ($koPlayer === null) {
-            $this->maniaControl->getChat()->sendError($this->chatPrefix . " Unable to add player " . $player->getEscapedNickname() . " to team " . $team);
+            $this->maniaControl->getChat()->sendError($this->chatPrefix . "Unable to add player " . $player->getEscapedNickname() . " to team " . $team);
         }
 
         $this->displayManialinks(false);
@@ -407,12 +432,17 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
 
     private function checkPlayerStatuses()
     {
+        $players = $this->maniaControl->getPlayerManager()->getPlayers();
+
         foreach ($this->teamManager->getTeams() as $team) {
-            foreach ($team->getPlayers() as $teamPlayer) {
-                $player = $this->maniaControl->getPlayerManager()->getPlayer($teamPlayer->login, true);
-                $teamPlayer->isConnected = true;
-                if ($player === null) {
+            foreach ($team->getPlayerLogins() as $login) {
+                $teamPlayer = $team->getPlayer($login);
+                if ($teamPlayer) {
                     $teamPlayer->isConnected = false;
+                    if (isset($players[$login])) {
+                        $teamPlayer->isConnected = true;
+                        Logger::logInfo($teamPlayer->player->getEscapedNickname() . " connects");
+                    }
                 }
             }
         }
@@ -430,15 +460,14 @@ class PluginTeamKO implements CommandListener, CallbackListener, Plugin
 
         $this->teamManager->addPlayerToTeam($cbPlayer, 0);
 
-        for ($i = 1; $i <= 9; $i++) {
-            $this->maniaControl->getClient()->connectFakePlayer();
-            $player = $this->maniaControl->getPlayerManager()->getPlayer("*fakeplayer" . $i . "*");
-            if ($player !== null) {
-                if ($i >= 5) {
-                    $this->teamManager->addPlayerToTeam($player, 0);
-                } else {
-                    $this->teamManager->addPlayerToTeam($player, 1);
-                }
+        $teamNb = sizeof($this->teamManager->getTeams());
+
+        for ($i = 0; $i < $this->teamManager->getTeamSize(); $i++) {
+            $login = "*fakeplayer" . ($i + 1) . "*";
+            $team = $this->teamManager->getTeam($i % $teamNb);
+            if ($team !== null) {
+                $player = $this->maniaControl->getPlayerManager()->getPlayer($login, true);
+                if ($player) $team->addPlayer($player);
             }
         }
 
@@ -841,6 +870,7 @@ EOT;
         }
 
         $this->purgeTeams();
+        $this->teamManager->resetPlayerStatuses();
         $this->displayManialinks(false);
     }
 
@@ -957,6 +987,50 @@ EOT;
         $this->maniaControl->getManialinkManager()->hideManialink(self::MLID_RMXTEAMSWIDGET_LIVE_WIDGETBACKGROUND, $login);
     }
 
+    private function genPlayerInfo($index, $player, $playerFrame, $koQueue)
+    {
+
+        if ($koQueue == -1) {
+            $koQueue = "";
+        } else {
+            $koQueue = '$fff ' . $koQueue;
+        }
+
+        $label = new Label();
+        $label->setText($player->player->getEscapedNickname())
+            ->setHorizontalAlign("left")
+            ->setVerticalAlign("center")
+            ->setTextSize(1.5)
+            ->setSize(25, 4)
+            ->setTextFont("GameFontRegular")
+            ->setPosition(10, -($index * 4 - 0.5), 1);
+        $playerFrame->addChild($label);
+
+        $quad = new Quad();
+        $quad->setHorizontalAlign("left")
+            ->setBackgroundColor("0008")
+            ->setSize(25, 3.5)
+            ->setPosition(9.5, -($index * 4), 0);
+        $playerFrame->addChild($quad);
+
+        $label2 = new Label();
+        $label2->setText($player->getStatus().$koQueue)
+            ->setHorizontalAlign("center")
+            ->setVerticalAlign("center")
+            ->setTextSize(1.5)
+            ->setSize(10, 4)
+            ->setTextFont("GameFontSemiBold")
+            ->setPosition(4, -($index * 4 - 0.5), 1);
+        $playerFrame->addChild($label2);
+
+        $quad = new Quad();
+        $quad->centerAlign()
+            ->setBackgroundColor("0008")
+            ->setSize(10, 3.5)
+            ->setPosition(4, -($index * 4), 0);
+        $playerFrame->addChild($quad);
+    }
+
     /**
      * @param Team $team
      * @return Frame
@@ -965,6 +1039,7 @@ EOT;
     {
 
         $players = $team->getPlayers();
+        $orderKO = $team->getKnockoutOrder();
 
         $frame = new Frame();
         $frame->setPosition(0, 0);
@@ -987,42 +1062,27 @@ EOT;
         $playerFrame = new Frame();
         $frame->addChild($playerFrame);
         $playerFrame->setPosition(-0.5, -6);
-        $index = 0;
 
+
+        $arrayPlayers = [];
+        $arrayKo = [];
         foreach ($players as $player) {
-            $label = new Label();
-            $label->setText($player->player->getEscapedNickname())
-                ->setHorizontalAlign("left")
-                ->setVerticalAlign("center")
-                ->setTextSize(1.5)
-                ->setSize(25, 4)
-                ->setTextFont("GameFontRegular")
-                ->setPosition(10, -($index * 4 - 0.5), 1);
-            $playerFrame->addChild($label);
+            if (array_key_exists($player->login, $orderKO)) {
+                $arrayKo[$orderKO[$player->login]] = $player;
+            } else {
+                $arrayPlayers[] = $player;
+            }
+        }
+        $index = 0;
+        ksort($arrayKo, SORT_NUMERIC);
 
-            $quad = new Quad();
-            $quad->setHorizontalAlign("left")
-                ->setBackgroundColor("0008")
-                ->setSize(25, 3.5)
-                ->setPosition(9.5, -($index * 4), 0);
-            $playerFrame->addChild($quad);
+        foreach ($arrayPlayers as $player) {
+            $this->genPlayerInfo($index, $player, $playerFrame, -1);
+            $index += 1;
+        }
 
-            $label2 = new Label();
-            $label2->setText($player->getStatus())
-                ->setHorizontalAlign("center")
-                ->setVerticalAlign("center")
-                ->setTextSize(1.5)
-                ->setSize(10, 4)
-                ->setTextFont("GameFontSemiBold")
-                ->setPosition(4, -($index * 4 - 0.5), 1);
-            $playerFrame->addChild($label2);
-
-            $quad = new Quad();
-            $quad->centerAlign()
-                ->setBackgroundColor("0008")
-                ->setSize(10, 3.5)
-                ->setPosition(4, -($index * 4), 0);
-            $playerFrame->addChild($quad);
+        foreach ($arrayKo as $ko => $player) {
+            $this->genPlayerInfo($index, $player, $playerFrame, ($ko+1));
             $index += 1;
         }
 
@@ -1067,10 +1127,18 @@ EOT;
     public function showTeamWindow(string $login): void
     {
         $maniaLink = new ManiaLink(self::MLID_TEAMKO_WINDOW);
-        $teamLogins = [];
-        foreach ($this->teamManager->getTeams() as $teamIndex => $team) {
-            $teamLogins[$teamIndex] = $team->getPlayerLogins();
+        $players = [];
+
+        foreach ($this->maniaControl->getPlayerManager()->getPlayers(true) as $player) {
+            $players[$player->login] = $player;
         }
+
+        foreach ($this->teamManager->getTeams() as $teamIndex => $team) {
+            foreach ($team->getPlayers() as $player) {
+                $players[$player->login] = $player->player;
+            }
+        }
+
         $teamPrefixes = [
             0 => $this->teamManager->getTeam(0)->chatPrefix,
             1 => $this->teamManager->getTeam(1)->chatPrefix
@@ -1123,13 +1191,19 @@ EOT;
         $teamFrame->setPosition(0, -2.5);
         $mainFrame->addChild($teamFrame);
 
+        $playerIndex = -1;
+        foreach ($players as $playerLogin => $player) {
+            $playerIndex += 1;
+            $team = $this->teamManager->getPlayerTeam($player->login);
+            $color = "000";
+            $prefix = "";
+            if ($team !== null) {
+                $color = $team->color;
+                $prefix = $team->chatPrefix;
+            }
 
-        foreach ($this->maniaControl->getPlayerManager()->getPlayers(true) as $playerIndex => $player) {
-            $team = " ";
-            foreach ($teamLogins as $teamNb => $logins) {
-                if (in_array($player->login, $logins)) {
-                    $team = $teamNb;
-                }
+            if ($this->maniaControl->getPlayerManager()->getPlayer($player->login, true) == null) {
+                $prefix = '$999DC';
             }
 
             $playerFrame = new Frame();
@@ -1140,26 +1214,19 @@ EOT;
             $playerFrame->addChild($quad);
             $quad->setSize(90, 4)
                 ->setZ(-1)
-                ->setHorizontalAlign("left");
-            if (is_numeric($team)) {
-                $color = $teamColors[$team];
-            } else {
-                $color = '000';
-            }
-            $quad->setBackgroundColor($color . "7");
+                ->setHorizontalAlign("left")
+                ->setBackgroundColor($color . "3");
 
             $labelNb = new Label();
             $playerFrame->addChild($labelNb);
-            $prefix = "";
-            if (is_numeric($team)) {
-                $prefix = $teamPrefixes[$team];
-            }
+
             $labelNb->setText($prefix)
                 ->setSize(10, 4)
                 ->setX(5)
                 ->setHorizontalAlign("center")
                 ->setTextSize(2)
-                ->setTextFont("GameFontBlack");
+                ->setTextFont("GameFontBlack")
+                ->setTextEmboss(true);
 
             $label = new Label();
             $playerFrame->addChild($label);
@@ -1168,7 +1235,8 @@ EOT;
                 ->setX(12)
                 ->setHorizontalAlign("left")
                 ->setTextSize(1.5)
-                ->setTextFont("GameFontSemiBold");
+                ->setTextFont("GameFontSemiBold")
+                ->setTextEmboss(true);
 
             $team1 = new Label_Button();
             $playerFrame->addChild($team1);
