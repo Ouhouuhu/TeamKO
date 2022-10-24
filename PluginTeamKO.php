@@ -692,7 +692,7 @@ EOT;
 
         if ($structure->getSection() == "EndMap") {
             try {
-                $this->maniaControl->getClient()->sendHideManialinkPage(null, "teamKO.Winner");
+                $this->maniaControl->getManialinkManager()->hideManialink("teamKO.Winner");
             } catch (Exception $e) {
                 Logger::logError($e->getMessage());
             }
@@ -889,7 +889,7 @@ EOT;
     }
     public function cmdHideGfx(array $chatCallback, Player $player)
     {
-        $this->maniaControl->getClient()->sendHideManialinkPage(null, "teamKO.Winner");
+        $this->maniaControl->getManialinkManager()->hideManialink("teamKO.Winner");
     }
     /**
      * @param array $chatCallback
