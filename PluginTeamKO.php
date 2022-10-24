@@ -790,12 +790,17 @@ EOT;
     /**
      * Handle PlayerConnect callback
      *
-     * @param Player $player
+     * @param Player|null $player
      * @return void
      */
-    public function handlePlayerConnect(Player $player): void
+    public function handlePlayerConnect(?Player $player): void
     {
         Logger::Log("handlePlayerConnect");
+        if ($player === null) {
+            Logger::logError("Player with null value connected...");
+            return;
+        }
+
         $matchStatus = $this->MatchManagerCore->getMatchStatus();
 
         if ($this->freeTeamMode && !$matchStatus) {
@@ -811,23 +816,29 @@ EOT;
                     Logger::logError($ex->getMessage());
                 }
             }
-        }
-
-        $player = $team->getPlayer($player->login);
-        if ($player !== null) {
-            $player->isConnected = true;
+        } else {
+            $player = $team->getPlayer($player->login);
+            if ($player !== null) {
+                $player->isConnected = true;
+            }
         }
 
         $this->displayManialinks(false);
     }
 
     /**
-     * @param Player $player
+     * @param Player|null $player
      * @return void
      */
-    public function handlePlayerDisconnect(Player $player): void
+    public function handlePlayerDisconnect(?Player $player): void
     {
         Logger::Log("handlePlayerDisconnect");
+
+        if ($player === null) {
+            Logger::logError("Player with null value tried to disconnect...");
+            return;
+        }
+
         $team = $this->teamManager->getPlayerTeam($player->login);
         if ($team === null)
             return;
