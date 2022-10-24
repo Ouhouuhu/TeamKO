@@ -797,7 +797,6 @@ EOT;
     {
         Logger::Log("handlePlayerConnect");
         $matchStatus = $this->MatchManagerCore->getMatchStatus();
-        $this->displayManialinks(false);
 
         if ($this->freeTeamMode && !$matchStatus) {
             $this->maniaControl->getChat()->sendSuccess($this->chatPrefix . "Use /jointeam *number* to join the team you want!", $player);
@@ -812,13 +811,14 @@ EOT;
                     Logger::logError($ex->getMessage());
                 }
             }
-            return;
         }
 
         $player = $team->getPlayer($player->login);
-        if ($player !== null)
+        if ($player !== null) {
             $player->isConnected = true;
+        }
 
+        $this->displayManialinks(false);
     }
 
     /**
@@ -887,10 +887,12 @@ EOT;
         }
 
     }
+
     public function cmdHideGfx(array $chatCallback, Player $player)
     {
         $this->maniaControl->getManialinkManager()->hideManialink("teamKO.Winner");
     }
+
     /**
      * @param array $chatCallback
      * @param Player $player
