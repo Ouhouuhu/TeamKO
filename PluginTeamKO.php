@@ -797,7 +797,7 @@ EOT;
     {
         Logger::Log("handlePlayerConnect");
         $matchStatus = $this->MatchManagerCore->getMatchStatus();
-        $this->displayManialinks();
+        $this->displayManialinks(false);
 
         if ($this->freeTeamMode && !$matchStatus) {
             $this->maniaControl->getChat()->sendSuccess($this->chatPrefix . "Use /jointeam *number* to join the team you want!", $player);
@@ -1357,7 +1357,7 @@ EOT;
      *
      * @param bool|string $diff
      */
-    public function displayManialinks($diff)
+    public function displayManialinks($diff = false)
     {
         $this->showTeamWidget(null);
 
