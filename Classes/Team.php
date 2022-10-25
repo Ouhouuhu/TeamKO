@@ -128,7 +128,7 @@ class Team
     {
         $alive = 0;
         foreach ($this->players as $player) {
-            if ($player->isAlive) {
+            if ($player->isAlive && $player->isConnected) {
                 $alive += 1;
             }
         }
