@@ -1091,33 +1091,33 @@ EOT;
             ->setHorizontalAlign("left")
             ->setVerticalAlign("center")
             ->setTextSize(1.5)
-            ->setSize(25, 4)
+            ->setSize(22, 4)
             ->setTextFont("GameFontRegular")
-            ->setPosition(10, -($index * 4 - 0.5), 1);
+            ->setPosition(8, -($index * 4 - 0.5), 1);
         $playerFrame->addChild($label);
 
         $quad = new Quad();
         $quad->setHorizontalAlign("left")
             ->setBackgroundColor("0008")
-            ->setSize(25, 3.5)
-            ->setPosition(9.5, -($index * 4), 0);
+            ->setSize(22, 3.5)
+            ->setPosition(7.5, -($index * 4), 0);
         $playerFrame->addChild($quad);
 
         $label2 = new Label();
         $label2->setText($player->getStatus() . $koQueue)
             ->setHorizontalAlign("center")
             ->setVerticalAlign("center")
-            ->setTextSize(1.5)
-            ->setSize(10, 4)
+            ->setTextSize(1.2)
+            ->setSize(8, 4)
             ->setTextFont("GameFontSemiBold")
-            ->setPosition(4, -($index * 4 - 0.5), 1);
+            ->setPosition(3, -($index * 4 - 0.5), 1);
         $playerFrame->addChild($label2);
 
         $quad = new Quad();
         $quad->centerAlign()
             ->setBackgroundColor("0008")
-            ->setSize(10, 3.5)
-            ->setPosition(4, -($index * 4), 0);
+            ->setSize(8, 3.5)
+            ->setPosition(3, -($index * 4), 0);
         $playerFrame->addChild($quad);
     }
 
@@ -1195,9 +1195,9 @@ EOT;
             $teamFrame = $this->genTeamFrame($team);
             if ($i % 2 == 0) {
                 $posCounter += 1;
-                $teamFrame->setPosition(-158 + (32 * $posCounter), 75);
+                $teamFrame->setPosition(-158 + (34 * $posCounter), 75);
             } else {
-                $teamFrame->setPosition(128 - (32 * $posCounter), 75);
+                $teamFrame->setPosition(128 - (34 * $posCounter), 75);
             }
             $frame->addChild($teamFrame);
         }
